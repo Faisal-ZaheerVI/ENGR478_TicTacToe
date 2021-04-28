@@ -56,7 +56,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "driverlib/sysctl.h"
-#include "Nokia5110.h"
 #include "bitmapPhotos.h"
 // Maximum dimensions of the LCD, although the pixels are
 // numbered from zero to (MAX-1).  Address may automatically
