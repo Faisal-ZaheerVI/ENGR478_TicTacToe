@@ -1,3 +1,21 @@
+#include <stdint.h>
+#include <stdbool.h>
+#include <stdlib.h>
+#include "driverlib/adc.h"
+#include "driverlib/gpio.h"
+#include "driverlib/interrupt.h"
+#include "driverlib/pin_map.h"
+#include "driverlib/rom_map.h"
+#include "driverlib/sysctl.h"
+#include "driverlib/timer.h"
+#include "driverlib/uart.h"
+#include "inc/hw_types.h"
+#include "inc/hw_memmap.h"
+#include "inc/hw_gpio.h"
+#include "inc/tm4c123gh6pm.h"
+#include "Nokia5110.h"
+#include "bitmapPhotos.h"
+
 // Nokia5110.c
 // Runs on LM4F120/TM4C123
 // Use SSI0 to send an 8-bit code to the Nokia5110 48x84
@@ -5,6 +23,8 @@
 // This file has been modified to work with TExaS, which
 // sets the PLL to 80 MHz, where earlier versions ran at
 // 50 MHz or less.
+// Daniel Valvano
+// December 10, 2013
 
 // Font table, initialization, and other functions based
 // off of Nokia_5110_Example from Spark Fun:
@@ -52,14 +72,10 @@
 // SSI0Clk       (SCLK, pin 7) connected to PA2
 // back light    (LED, pin 8) not connected, consists of 4 white LEDs which draw ~80mA total
 
-#include "Nokia5110.h"
-#include <stdint.h>
-#include <stdbool.h>
-#include "driverlib/sysctl.h"
-#include "bitmapPhotos.h"
 // Maximum dimensions of the LCD, although the pixels are
 // numbered from zero to (MAX-1).  Address may automatically
 // be incremented after each transmission.
+
 #define MAX_X                   84
 #define MAX_Y                   48
 
@@ -224,6 +240,528 @@ enum typeOfWrite{
 // The write data operation waits until there is room in the
 // transmit FIFO, configures the Data/Command pin for data,
 // and then adds the data to the transmit FIFO.
+
+/* Testing the joystick
+VCC - +3.3V
+GND - Ground
+X-axis: PE1
+Y-axis: PE2
+K-axis: PB5
+
+1. ADC to use joystick
+	- voltage values
+
+2. UART to see in TeraTerm
+- can use voltage to determine direction
+*/
+
+uint32_t ui32ADC0Value[4]; 	// Reading of X-Axis
+uint32_t ui32ADC1Value[4]; 	// Reading of Y-Axis
+volatile uint32_t ui32_Xpin;
+volatile uint32_t ui32_Ypin;
+volatile uint32_t ui32x_volt;
+volatile uint32_t ui32y_volt;
+bool xRead = false;
+bool yRead = false;
+
+char gameBoard [5][5] = {
+{' ', '|', ' ', '|', ' '}, 
+{'-', '+', '-', '+', '-'}, 
+{' ', '|', ' ', '|', ' '}, 
+{'-', '+', '-', '+', '-'},
+{' ', '|', ' ', '|', ' '} 
+};
+
+// Global variables.
+int userInput;
+char playerSign = 'X';
+char computerSign = 'O';
+
+char userPrompt[35] = "Choose a playable position (1-9): ";
+char errorMessage[44] = "Invalid position, select another position: ";
+char posTakenError[42] = "Position taken, select another position: ";
+char playerChoiceMessage[12] = "You chose: ";
+char computerChoiceMessage[20] = "The computer chose: ";
+
+char playerWinMessage[9] = "You win!";
+char computerWinMessage[19] = "The computer wins!";
+bool playerWin = false;
+bool computerWin = false;
+bool endGame = false;
+
+bool testCondition = false;
+
+float x_volt;
+float y_volt;
+
+// Port Init
+void PortFunctionInit(void)
+{
+		SysCtlPeripheralEnable(SYSCTL_PERIPH_ADC0);	// using ADC0 and ADC1
+		SysCtlPeripheralEnable(SYSCTL_PERIPH_ADC1);
+		SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOE);	// using PE1-X, PE2-Y
+	
+		SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF); //enable GPIO port for LED
+	
+		GPIOPinTypeADC(GPIO_PORTE_BASE, GPIO_PIN_1 | GPIO_PIN_2);
+	
+		GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_2); //enable pin for LED PF2
+}
+
+void uart_Init(void) {
+	
+		SysCtlClockSet(SYSCTL_SYSDIV_5 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN | SYSCTL_XTAL_16MHZ);
+
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_UART0);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
+
+    GPIOPinConfigure(GPIO_PA0_U0RX);
+    GPIOPinConfigure(GPIO_PA1_U0TX);
+    GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);
+
+
+    UARTConfigSetExpClk(UART0_BASE, SysCtlClockGet(), 115200,
+        (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
+}
+
+// TIMER0A
+void Timer0A_Init(unsigned long period) 	// Using a periodic Timer 0A
+{
+	SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER0);
+	TimerConfigure(TIMER0_BASE, TIMER_CFG_PERIODIC);
+	TimerLoadSet(TIMER0_BASE, TIMER_A, period -1);
+	IntPrioritySet(INT_TIMER0A, 0x00);
+	IntEnable(INT_TIMER0A);
+	TimerIntEnable(TIMER0_BASE, TIMER_A);
+	TimerEnable(TIMER0_BASE, TIMER_A); // enable Timer0A
+}
+
+//ADC0 initializaiton
+void ADC0_Init(void)
+{
+		SysCtlClockSet(SYSCTL_SYSDIV_5|SYSCTL_USE_PLL|SYSCTL_OSC_MAIN|SYSCTL_XTAL_16MHZ); // configures the system clock to be 40MHz
+		//SysCtlClockSet(SYSCTL_SYSDIV_4 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN | SYSCTL_XTAL_16MHZ);
+		SysCtlPeripheralEnable(SYSCTL_PERIPH_ADC0);	//activate the clock of ADC0
+		SysCtlDelay(6);	//insert a few cycles after enabling the peripheral to allow the clock to be fully activated.
+
+		ADCSequenceDisable(ADC0_BASE, 2); //disables ADC0 before the conf. is complete
+		ADCSequenceConfigure(ADC0_BASE, 2, ADC_TRIGGER_PROCESSOR, 0); // will use ADC0, SS1, processor-trigger, priority 0
+		ADCSequenceStepConfigure(ADC0_BASE, 2, 0, ADC_CTL_CH2 | ADC_CTL_IE | ADC_CTL_END); // Ch. 2 = PE1
+		//IntPrioritySet(INT_ADC0SS2, 0x00);  	 // configure ADC0 SS2 interrupt priority as 0
+		IntEnable(INT_ADC0SS2);    				// enable interrupt 31 in NVIC (ADC0 SS2)
+		ADCIntEnableEx(ADC0_BASE, ADC_INT_SS2);      // arm interrupt of ADC0 SS2
+	
+		ADCSequenceEnable(ADC0_BASE, 2); //enable ADC0
+}
+
+//ADC1 initializaiton
+void ADC1_Init(void)
+{
+		SysCtlClockSet(SYSCTL_SYSDIV_5|SYSCTL_USE_PLL|SYSCTL_OSC_MAIN|SYSCTL_XTAL_16MHZ); // configures the system clock to be 40MHz
+		//SysCtlClockSet(SYSCTL_SYSDIV_4 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN | SYSCTL_XTAL_16MHZ);
+		SysCtlPeripheralEnable(SYSCTL_PERIPH_ADC1);	//activate the clock of ADC0
+		SysCtlDelay(6);	//insert a few cycles after enabling the peripheral to allow the clock to be fully activated.
+
+		ADCSequenceDisable(ADC1_BASE, 2); //disables ADC0 before the conf. is complete
+		ADCSequenceConfigure(ADC1_BASE, 2, ADC_TRIGGER_PROCESSOR, 0); // will use ADC0, SS1, processor-trigger, priority 0
+		ADCSequenceStepConfigure(ADC1_BASE, 2, 1, ADC_CTL_CH1 | ADC_CTL_IE | ADC_CTL_END); // Ch. 1 = PE2 (Y axis.)
+		//IntPrioritySet(INT_ADC1SS2, 0x00);  	 // configure ADC0 SS2 interrupt priority as 0
+		IntEnable(INT_ADC1SS2);    				// enable interrupt 31 in NVIC (ADC0 SS2)
+		ADCIntEnableEx(ADC1_BASE, ADC_INT_SS2);      // arm interrupt of ADC0 SS2
+	
+		ADCSequenceEnable(ADC1_BASE, 2); //enable ADC0
+}
+
+void drawBoard() {
+	for (int i = 0; i < 5; i++) {
+		Nokia5110_SetCursor(0, i);
+		for (int j = 0; j < 5; j++) {
+			Nokia5110_OutChar(gameBoard[i][j]);
+		}
+	}
+}
+
+void askUserPrompt() {
+	int i;
+	for (i = 0; i < 35; i++) {
+		UARTCharPut(UART0_BASE, userPrompt[i]);
+	}
+	UARTCharPut(UART0_BASE, '\n');
+	UARTCharPut(UART0_BASE, '\r');
+}
+
+bool checkOpenPosition(int position) {
+	bool openSpace = false;
+	switch (position) {
+		case 1: if (gameBoard[0][0] == ' ')
+			openSpace = true;
+			break;
+		case 2: if (gameBoard[0][2] == ' ')
+			openSpace = true;
+			break;
+		case 3: if (gameBoard[0][4] == ' ')
+			openSpace = true;
+			break;
+		case 4: if (gameBoard[2][0] == ' ')
+			openSpace = true;
+			break;
+		case 5: if (gameBoard[2][2] == ' ')
+			openSpace = true;
+			break;
+		case 6: if (gameBoard[2][4] == ' ')
+			openSpace = true;
+			break;
+		case 7: if (gameBoard[4][0] == ' ')
+			openSpace = true;
+			break;
+		case 8: if (gameBoard[4][2] == ' ')
+			openSpace = true;
+			break;
+		case 9: if (gameBoard[4][4] == ' ')
+			openSpace = true;
+			break;
+	}
+	return openSpace;
+}
+
+void updatePos(int position) {
+	switch (position) {
+		case 1: gameBoard[0][0] = playerSign; break;
+		case 2: gameBoard[0][2] = playerSign; break;
+		case 3: gameBoard[0][4] = playerSign; break;
+		case 4: gameBoard[2][0] = playerSign; break;
+		case 5: gameBoard[2][2] = playerSign; break;
+		case 6: gameBoard[2][4] = playerSign; break;
+		case 7: gameBoard[4][0] = playerSign; break;
+		case 8: gameBoard[4][2] = playerSign; break;
+		case 9: gameBoard[4][4] = playerSign; break;
+	}
+}
+
+void updateComputerPos(int position) {
+	switch (position) {
+		case 1: gameBoard[0][0] = computerSign; break;
+		case 2: gameBoard[0][2] = computerSign; break;
+		case 3: gameBoard[0][4] = computerSign; break;
+		case 4: gameBoard[2][0] = computerSign; break;
+		case 5: gameBoard[2][2] = computerSign; break;
+		case 6: gameBoard[2][4] = computerSign; break;
+		case 7: gameBoard[4][0] = computerSign; break;
+		case 8: gameBoard[4][2] = computerSign; break;
+		case 9: gameBoard[4][4] = computerSign; break;
+	}
+}
+
+void computerTurn() {	
+	int rand();
+	int compInput = rand() % 9 + 1;
+	
+	bool posOpen = checkOpenPosition(compInput);
+	while (!posOpen) {
+		compInput = rand() % 9 + 1;
+		posOpen = checkOpenPosition(compInput);
+	}
+	updateComputerPos(compInput);
+	char computerInput = compInput+'0';
+	// "The computer chose: # "
+	for (int i = 0; i < 20; i++) {
+		UARTCharPut(UART0_BASE, computerChoiceMessage[i]);
+	}
+	UARTCharPut(UART0_BASE, computerInput);
+	
+	UARTCharPut(UART0_BASE, '\n'); // New line carriage
+	UARTCharPut(UART0_BASE, '\r'); // Returns carriage to left of terminal.
+}
+
+bool checkWin() {
+	// Checks if the player has won the game.
+	if ((gameBoard[0][0] == playerSign && gameBoard[2][2] == playerSign && gameBoard[4][4] == playerSign)
+		|| (gameBoard[0][4] == playerSign && gameBoard[2][2] == playerSign && gameBoard[4][0] == playerSign)
+		|| (gameBoard[0][0] == playerSign && gameBoard[0][2] == playerSign && gameBoard[0][4] == playerSign)
+		|| (gameBoard[2][0] == playerSign && gameBoard[2][2] == playerSign && gameBoard[2][4] == playerSign)
+		|| (gameBoard[4][0] == playerSign && gameBoard[4][2] == playerSign && gameBoard[4][4] == playerSign)
+		|| (gameBoard[0][0] == playerSign && gameBoard[2][0] == playerSign && gameBoard[4][0] == playerSign)
+		|| (gameBoard[0][2] == playerSign && gameBoard[2][2] == playerSign && gameBoard[4][2] == playerSign)
+		|| (gameBoard[0][4] == playerSign && gameBoard[2][4] == playerSign && gameBoard[4][4] == playerSign)) {
+			playerWin = true;
+			return true;
+	}
+	
+	// Checks if the computer has won the game.
+	else if ((gameBoard[0][0] == computerSign && gameBoard[2][2] == computerSign && gameBoard[4][4] == computerSign)
+		|| (gameBoard[0][4] == computerSign && gameBoard[2][2] == computerSign && gameBoard[4][0] == computerSign)
+		|| (gameBoard[0][0] == computerSign && gameBoard[0][2] == computerSign && gameBoard[0][4] == computerSign)
+		|| (gameBoard[2][0] == computerSign && gameBoard[2][2] == computerSign && gameBoard[2][4] == computerSign)
+		|| (gameBoard[4][0] == computerSign && gameBoard[4][2] == computerSign && gameBoard[4][4] == computerSign)
+		|| (gameBoard[0][0] == computerSign && gameBoard[2][0] == computerSign && gameBoard[4][0] == computerSign)
+		|| (gameBoard[0][2] == computerSign && gameBoard[2][2] == computerSign && gameBoard[4][2] == computerSign)
+		|| (gameBoard[0][4] == computerSign && gameBoard[2][4] == computerSign && gameBoard[4][4] == computerSign)) {
+			computerWin = true;
+			return true;
+	}
+		// Return false if neither side has won.
+		return false;
+}
+
+/* --- CHECK END GAME CONDITIONS --- */
+void checkEndGame() {
+	if (checkWin()) {
+		if (playerWin) {
+			for (int i = 0; i < 9; i++) {
+				UARTCharPut(UART0_BASE, playerWinMessage[i]);
+			}
+		}
+		else if (computerWin) {
+			for (int i = 0; i < 19; i++) {
+				UARTCharPut(UART0_BASE, computerWinMessage[i]);
+			}
+		}
+		endGame = checkWin();
+	}
+}
+
+//interrupt handler
+void ADC0_Handler(void)
+{
+	
+		ADCIntClear(ADC0_BASE, 2);
+		ADCProcessorTrigger(ADC0_BASE, 2);
+	
+		ADCIntClear(ADC1_BASE, 2);
+		ADCProcessorTrigger(ADC1_BASE, 2);
+
+		// ADC Values
+		ADCSequenceDataGet(ADC0_BASE, 2, ui32ADC0Value);	// gives X-axis reading
+		ADCSequenceDataGet(ADC1_BASE, 2, ui32ADC1Value);	// gives Y-axis reading
+	
+		// Grabs X&Y readings -> integers
+		ui32_Xpin = ui32ADC0Value[0];	
+		ui32_Ypin = ui32ADC1Value[0];
+
+		// Converts readings to mV
+		ui32x_volt = ( (ui32_Xpin * 3.3) / 4095 );		// X mV - outputs: 0, 1, 3
+		ui32y_volt = ( (ui32_Ypin * 3.3) / 4095 );  	// Y mV - outputs: 0, 1, 3
+	
+		x_volt = ( (ui32_Xpin * 3.3) / 4095 );
+		y_volt = ( (ui32_Ypin * 3.3) / 4095 );  
+	
+		// Default (On Options)
+		if (y_volt <= 2 && y_volt >= 1) {
+			Nokia5110_SetCursor(0, 0);
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(6, 0);
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(0, 4);
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(5, 4);
+			Nokia5110_OutString(" ");
+			
+			Nokia5110_SetCursor(0, 2);
+			Nokia5110_OutString("\[");
+			Nokia5110_SetCursor(8, 2);
+			Nokia5110_OutString("\]");
+		}
+		// Goes down (On Exit)
+		else if (y_volt > 2) {
+			Nokia5110_SetCursor(0, 2);
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(8, 2);
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(0, 0);
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(6, 0);
+			Nokia5110_OutString(" ");
+			
+			Nokia5110_SetCursor(0, 4);
+			Nokia5110_OutString("\[");
+			Nokia5110_SetCursor(5, 4);
+			Nokia5110_OutString("\]");
+		}
+		// Goes up (On Start)
+		else if (y_volt < 1) {
+			Nokia5110_SetCursor(0, 2);
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(8, 2);
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(0, 4);
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(5, 4);
+			Nokia5110_OutString(" ");
+			
+			Nokia5110_SetCursor(0, 0);
+			Nokia5110_OutString("\[");
+			Nokia5110_SetCursor(6, 0);
+			Nokia5110_OutString("\]");
+		}
+		else {
+			Nokia5110_Clear();
+			Nokia5110_SetCursor(0, 0);
+			Nokia5110_OutString("ERROR!");
+		}
+	
+		//SysCtlDelay(SysCtlClockGet() / (1 * 3)); //delay ~1000 msec = 1 second
+	
+		/*
+		if (ui32x_volt >= 2 && xRead == false) {
+					UARTCharPutNonBlocking(UART0_BASE, 'L');
+					xRead = true;
+		} 
+		else if (ui32_Xpin < 1 && xRead == false) {
+					UARTCharPutNonBlocking(UART0_BASE, 'R');
+					xRead = true;
+		}
+		else {
+			if (xRead == true) {
+				xRead = false;
+			}
+		}
+
+		if (ui32y_volt >= 2 && yRead == false) {
+					UARTCharPutNonBlocking(UART0_BASE, 'U');
+					yRead = true;
+		} 
+		else if (ui32y_volt < 1 && yRead == false) {
+					UARTCharPutNonBlocking(UART0_BASE, 'D');
+					yRead = true;
+		}
+		else {
+			if (yRead == true) {
+				yRead = false;
+			}
+		}
+		*/
+}
+
+// INT. HANDLER  0A
+void Timer0A_Handler(void)
+{
+	//Ack. Flag
+	TimerIntClear(TIMER0_BASE, TIMER_TIMA_TIMEOUT);
+	
+	if (!testCondition) {
+		testCondition = true;
+	}
+	else if (testCondition) {
+		testCondition = false;
+	}
+}
+/*
+void UARTIntHandler(void)
+{
+    uint32_t ui32Status;
+
+    ui32Status = UARTIntStatus(UART0_BASE, true); //get interrupt status
+
+    UARTIntClear(UART0_BASE, ui32Status); //clear the asserted interrupts
+	
+		int i = 0;
+	
+		for (int j = 0; j < 12; j++) {
+			UARTCharPut(UART0_BASE, playerChoiceMessage[j]);
+		}
+	
+		switch (UARTCharGet(UART0_BASE)) {
+			case '1': UARTCharPutNonBlocking(UART0_BASE, '1');
+							userInput = 1;
+							break;
+			case '2': UARTCharPutNonBlocking(UART0_BASE, '2');
+							userInput = 2;
+							break;
+			case '3': UARTCharPutNonBlocking(UART0_BASE, '3');
+							userInput = 3;
+							break;
+			case '4': UARTCharPutNonBlocking(UART0_BASE, '4');
+							userInput = 4;
+							break;
+			case '5': UARTCharPutNonBlocking(UART0_BASE, '5');
+							userInput = 5;
+							break;
+			case '6': UARTCharPutNonBlocking(UART0_BASE, '6');
+							userInput = 6;
+							break;
+			case '7': UARTCharPutNonBlocking(UART0_BASE, '7');
+							userInput = 7;
+							break;
+			case '8': UARTCharPutNonBlocking(UART0_BASE, '8');
+							userInput = 8;
+							break;
+			case '9': UARTCharPutNonBlocking(UART0_BASE, '9');
+							userInput = 9;
+							break;
+			default: while (i < 44) {
+				UARTCharPut(UART0_BASE, errorMessage[i]);
+				i++;
+			}
+		}
+		
+		UARTCharPut(UART0_BASE, '\n'); // New line carriage
+		UARTCharPut(UART0_BASE, '\r'); // Returns carriage to left of terminal.
+		
+		
+		bool posOpen = checkOpenPosition(userInput);
+		while (!posOpen) {
+			for (i = 0; i < 42; i++) {
+				UARTCharPut(UART0_BASE, posTakenError[i]);
+			}
+			UARTCharPut(UART0_BASE, '\n'); // New line carriage
+			UARTCharPut(UART0_BASE, '\r'); // Returns carriage to left of terminal.
+			switch(UARTCharGet(UART0_BASE)) {
+				case '1': UARTCharPutNonBlocking(UART0_BASE, '1');
+					userInput = 1; break;
+				case '2': UARTCharPutNonBlocking(UART0_BASE, '2');
+					userInput = 2; break;
+				case '3': UARTCharPutNonBlocking(UART0_BASE, '3');
+					userInput = 3; break;
+				case '4': UARTCharPutNonBlocking(UART0_BASE, '4');
+					userInput = 4; break;
+				case '5': UARTCharPutNonBlocking(UART0_BASE, '5');
+					userInput = 5; break;
+				case '6': UARTCharPutNonBlocking(UART0_BASE, '6');
+					userInput = 6; break;
+				case '7': UARTCharPutNonBlocking(UART0_BASE, '7');
+					userInput = 7; break;
+				case '8': UARTCharPutNonBlocking(UART0_BASE, '8');
+					userInput = 8; break;
+				case '9': UARTCharPutNonBlocking(UART0_BASE, '9');
+					userInput = 9; break;
+				default: for (i = 0; i < 44; i++) {
+					UARTCharPut(UART0_BASE, errorMessage[i]);
+				}
+			}
+			UARTCharPut(UART0_BASE, '\n'); // New line carriage
+			UARTCharPut(UART0_BASE, '\r'); // Returns carriage to left of terminal.
+			posOpen = checkOpenPosition(userInput);
+		}
+		
+		updatePos(userInput);
+			
+		drawBoard();
+		
+		checkEndGame();
+		
+		// --- COMPUTER'S TURN --- 
+		//SysCtlDelay(SysCtlClockGet() / (1 * 3)); //delay ~1000 msec = 1 second
+		//SysCtlDelay(SysCtlClockGet() / (1000 * 3)); //delay ~1 msec
+		
+		if (!checkWin()) {
+			SysCtlDelay(SysCtlClockGet() / (1 * 3)); //delay ~1000 msec = 1 second
+			computerTurn();
+			SysCtlDelay(SysCtlClockGet() / (1 * 3)); //delay ~1000 msec = 1 second
+			drawBoard();
+			checkEndGame();
+		}
+		
+		if (!checkWin()) {
+			askUserPrompt();
+		}
+
+		
+    //UARTCharPut(UART0_BASE, '\r'); // Returns carriage to left of terminal.
+		//UARTCharPut(UART0_BASE, '\n'); // New line carriage
+		//UARTCharPutNonBlocking(UART0_BASE, 'g');
+		//UARTCharGet(UART0_BASE)
+}
+*/
 
 // This is a helper function that sends an 8-bit message to the LCD.
 // inputs: type     COMMAND or DATA
@@ -419,33 +957,112 @@ void Nokia5110_DrawFullImage(const char *ptr){
 }
 
 int main(void) {
+	
+		/*
+		// Initialize ports and UART
+		unsigned long period = 160000; // reload timer0A
+		PortFunctionInit();
+		uart_Init();
+		ADC0_Init();
+		ADC1_Init();
+		Timer0A_Init(period);
 
+		drawBoard();
+		askUserPrompt();
+	
+    IntMasterEnable(); //enable processor interrupts
+    IntEnable(INT_UART0); //enable the UART interrupt
+    UARTIntEnable(UART0_BASE, UART_INT_RX | UART_INT_RT); //only enable RX and TX interrupts
+	
+		ADCProcessorTrigger(ADC0_BASE, 2);
+		ADCProcessorTrigger(ADC1_BASE, 2);
+		*/
+		PortFunctionInit();
+		ADC0_Init();
+		ADC1_Init();
 		Nokia5110_Init();
     SysCtlClockSet(SYSCTL_SYSDIV_1 | SYSCTL_USE_PLL | SYSCTL_OSC_INT | SYSCTL_XTAL_16MHZ);
+		unsigned long period = SysCtlClockGet()/2; // reload timer0A
+		Timer0A_Init(period);
 
     Nokia5110_Clear();
-	
-	/*
-		EXAMPLE CODE
-		Nokia5110_SetCursor(0, 0);
-		Nokia5110_OutString("My name is");
-		SysCtlDelay(SysCtlClockGet());
-		Nokia5110_SetCursor(0, 1);
-		Nokia5110_OutString("INSERT NAME");
-	*/
+		
+		Nokia5110_SetCursor(1, 0);
+		Nokia5110_OutString("Start");
+		Nokia5110_SetCursor(1, 2);
+		Nokia5110_OutString("Options");
+		Nokia5110_SetCursor(1, 4);
+		Nokia5110_OutString("Exit");
+		
+		IntMasterEnable(); //enable processor interrupts
+		ADCProcessorTrigger(ADC0_BASE, 2);
+		ADCProcessorTrigger(ADC1_BASE, 2);
+		
+    while (1)
+    {
+			/*
+			
+			Nokia5110_Clear();
+			
+			Nokia5110_OutString("Start");
+			Nokia5110_SetCursor(1, 2);
+			Nokia5110_OutString("Options");
+			Nokia5110_SetCursor(1, 4);
+			Nokia5110_OutString("Exit");
 
-    while(1)
-		{
+			
 			Nokia5110_SetCursor(0, 0);
-			Nokia5110_OutString(" | | ");
-			Nokia5110_SetCursor(0, 1);
-			Nokia5110_OutString("-----");
+			Nokia5110_OutString("\[");
+			Nokia5110_SetCursor(6, 0);
+			Nokia5110_OutString("\]");
+			
+			SysCtlDelay(SysCtlClockGet()/2);
+			Nokia5110_SetCursor(0, 0);
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(6, 0);
+			Nokia5110_OutString(" ");
 			Nokia5110_SetCursor(0, 2);
-			Nokia5110_OutString(" | | ");
-			Nokia5110_SetCursor(0, 3);
-			Nokia5110_OutString("-----");
+			Nokia5110_OutString("\[");
+			Nokia5110_SetCursor(8, 2);
+			Nokia5110_OutString("\]");
+			
+			SysCtlDelay(SysCtlClockGet()/2);
+			Nokia5110_SetCursor(0, 2);
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(8, 2);
+			Nokia5110_OutString(" ");
 			Nokia5110_SetCursor(0, 4);
-			Nokia5110_OutString(" | | ");
+			Nokia5110_OutString("\[");
+			Nokia5110_SetCursor(5, 4);
+			Nokia5110_OutString("\]");
+			
+			SysCtlDelay(SysCtlClockGet()/2);
+			
+			*/
+			
+			/*
+			if (testCondition) {
+				Nokia5110_SetCursor(0, 0);
+				Nokia5110_OutString("\[");
+				Nokia5110_SetCursor(6, 0);
+				Nokia5110_OutString("\]");
+			}
+			else if (!testCondition) {
+				Nokia5110_SetCursor(0, 0);
+				Nokia5110_OutString(" ");
+				Nokia5110_SetCursor(6, 0);
+				Nokia5110_OutString(" ");
+			}
+			*/
+			
+			
+			// END
     }
 
 }
+
+/*
+	TO DO LIST
+- Attempt checking for joystick voltages on a ADC Timer Processor (i.e. check for current voltage val every 0.5 sec)
+
+*/
