@@ -261,8 +261,6 @@ volatile uint32_t ui32_Xpin;
 volatile uint32_t ui32_Ypin;
 volatile uint32_t ui32x_volt;
 volatile uint32_t ui32y_volt;
-bool xRead = false;
-bool yRead = false;
 
 char gameBoard [5][5] = {
 {' ', '|', ' ', '|', ' '}, 
@@ -273,70 +271,55 @@ char gameBoard [5][5] = {
 };
 
 // Global variables.
-int userInput;
+int allChoices[] = {1,2,3,4,5,6,7,8,9};
+int choice = 0;
 char playerSign = 'X';
 char computerSign = 'O';
+float x_volt;
+float y_volt;
 bool isPlayerTurn = false;
 bool isComputerTurn = false;
-
-char userPrompt[35] = "Choose a playable position (1-9): ";
-char errorMessage[44] = "Invalid position, select another position: ";
-char posTakenError[42] = "Position taken, select another position: ";
-char playerChoiceMessage[12] = "You chose: ";
-char computerChoiceMessage[20] = "The computer chose: ";
-
-char playerWinMessage[9] = "You win!";
-char computerWinMessage[19] = "The computer wins!";
 bool playerWin = false;
 bool computerWin = false;
 bool endGame = false;
 
 bool testCondition = false;
 
-float x_volt;
-float y_volt;
-
 // Port Init
 void PortFunctionInit(void)
 {
 		SysCtlPeripheralEnable(SYSCTL_PERIPH_ADC0);	// using ADC0 and ADC1
 		SysCtlPeripheralEnable(SYSCTL_PERIPH_ADC1);
-		SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOE);	// using PE1-X, PE2-Y
-	
-		SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF); //enable GPIO port for LED
+		SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOE);	// Using PE1 - X, PE2 - Y
+		SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF); // For Switches/LEDs
 	
 		GPIOPinTypeADC(GPIO_PORTE_BASE, GPIO_PIN_1 | GPIO_PIN_2);
+
+    //First open the lock and select the bits we want to modify in the GPIO commit register.
+    HWREG(GPIO_PORTF_BASE + GPIO_O_LOCK) = GPIO_LOCK_KEY;
+    HWREG(GPIO_PORTF_BASE + GPIO_O_CR) = 0x1;
+		//Now modify the configuration of the pins that we unlocked.
+		GPIOPinTypeGPIOInput(GPIO_PORTF_BASE, GPIO_PIN_0); // Enable pin PF0 for GPIOInput
+		GPIOPinTypeGPIOInput(GPIO_PORTF_BASE, GPIO_PIN_4); // Enable pin PF4 for GPIOInput
 	
-		GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_2); //enable pin for LED PF2
+		//Enable pull-up on PF4 and PF0 (2^4 = 0x10 and 2^0 = 0x01 respectively)
+		GPIO_PORTF_PUR_R |= 0x11; 
+		
 }
 
-void uart_Init(void) {
-	
-		SysCtlClockSet(SYSCTL_SYSDIV_5 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN | SYSCTL_XTAL_16MHZ);
 
-    SysCtlPeripheralEnable(SYSCTL_PERIPH_UART0);
-    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
-
-    GPIOPinConfigure(GPIO_PA0_U0RX);
-    GPIOPinConfigure(GPIO_PA1_U0TX);
-    GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);
-
-
-    UARTConfigSetExpClk(UART0_BASE, SysCtlClockGet(), 115200,
-        (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
-}
-
-// TIMER0A
-void Timer0A_Init(unsigned long period) 	// Using a periodic Timer 0A
+void
+Interrupt_Init(void)
 {
-	SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER0);
-	TimerConfigure(TIMER0_BASE, TIMER_CFG_PERIODIC);
-	TimerLoadSet(TIMER0_BASE, TIMER_A, period -1);
-	IntPrioritySet(INT_TIMER0A, 0x00);
-	IntEnable(INT_TIMER0A);
-	TimerIntEnable(TIMER0_BASE, TIMER_A);
-	TimerEnable(TIMER0_BASE, TIMER_A); // enable Timer0A
+  IntEnable(INT_GPIOF);  							// enable interrupt 30 in NVIC (GPIOF)
+	IntPrioritySet(INT_GPIOF, 0x00); 		// configure GPIOF interrupt priority as 0
+	GPIO_PORTF_IM_R |= 0x11;   		// arm interrupt on PF0 and PF4
+	GPIO_PORTF_IS_R &= ~0x11;     // PF0 and PF4 are edge-sensitive
+  GPIO_PORTF_IBE_R &= ~0x11;   	// PF0 and PF4 not both edges trigger 
+  //GPIO_PORTF_IEV_R &= ~0x11;  	// PF0 and PF4 falling edge event
+	IntMasterEnable();       		// globally enable interrupt
 }
+
 
 //ADC0 initializaiton
 void ADC0_Init(void)
@@ -353,7 +336,7 @@ void ADC0_Init(void)
 		ADCSequenceStepConfigure(ADC0_BASE, 2, 1, ADC_CTL_CH2);
 		ADCSequenceStepConfigure(ADC0_BASE, 2, 2, ADC_CTL_CH2);
 		ADCSequenceStepConfigure(ADC0_BASE, 2, 3, ADC_CTL_CH2 | ADC_CTL_IE | ADC_CTL_END); // Ch. 2 = PE1
-		IntPrioritySet(INT_ADC0SS2, 0x00);  	 // configure ADC0 SS2 interrupt priority as 0
+		IntPrioritySet(INT_ADC0SS2, 0x02);  	 // configure ADC0 SS2 interrupt priority as 0
 		IntEnable(INT_ADC0SS2);    				// enable interrupt 31 in NVIC (ADC0 SS2)
 		ADCIntEnableEx(ADC0_BASE, ADC_INT_SS2);      // arm interrupt of ADC0 SS2
 	
@@ -374,12 +357,26 @@ void ADC1_Init(void)
 		ADCSequenceStepConfigure(ADC1_BASE, 2, 1, ADC_CTL_CH1);
 		ADCSequenceStepConfigure(ADC1_BASE, 2, 2, ADC_CTL_CH1);
 		ADCSequenceStepConfigure(ADC1_BASE, 2, 3, ADC_CTL_CH1 | ADC_CTL_IE | ADC_CTL_END); // Ch. 1 = PE2 (Y axis.)
-		IntPrioritySet(INT_ADC1SS2, 0x00);  	 // configure ADC0 SS2 interrupt priority as 0
+		IntPrioritySet(INT_ADC1SS2, 0x02);  	 // configure ADC0 SS2 interrupt priority as 0
 		IntEnable(INT_ADC1SS2);    				// enable interrupt 31 in NVIC (ADC0 SS2)
 		ADCIntEnableEx(ADC1_BASE, ADC_INT_SS2);      // arm interrupt of ADC0 SS2
 	
 		ADCSequenceEnable(ADC1_BASE, 2); //enable ADC0
 }
+
+/*
+// TIMER0A Initialization
+void Timer0A_Init(unsigned long period) 	// Using a periodic Timer 0A
+{
+	SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER0);
+	TimerConfigure(TIMER0_BASE, TIMER_CFG_PERIODIC);
+	TimerLoadSet(TIMER0_BASE, TIMER_A, period -1);
+	IntPrioritySet(INT_TIMER0A, 0x00);
+	IntEnable(INT_TIMER0A);
+	TimerIntEnable(TIMER0_BASE, TIMER_A);
+	//TimerEnable(TIMER0_BASE, TIMER_A); // enable Timer0A
+}
+*/
 
 void drawBoard() {
 	for (int i = 0; i < 5; i++) {
@@ -388,15 +385,6 @@ void drawBoard() {
 			Nokia5110_OutChar(gameBoard[i][j]);
 		}
 	}
-}
-
-void askUserPrompt() {
-	int i;
-	for (i = 0; i < 35; i++) {
-		UARTCharPut(UART0_BASE, userPrompt[i]);
-	}
-	UARTCharPut(UART0_BASE, '\n');
-	UARTCharPut(UART0_BASE, '\r');
 }
 
 bool checkOpenPosition(int position) {
@@ -474,12 +462,15 @@ void computerTurn() {
 	char computerInput = compInput+'0';
 	// "The computer chose: # "
 	for (int i = 0; i < 20; i++) {
-		UARTCharPut(UART0_BASE, computerChoiceMessage[i]);
+		//UARTCharPut(UART0_BASE, computerChoiceMessage[i]);
 	}
 	UARTCharPut(UART0_BASE, computerInput);
 	
 	UARTCharPut(UART0_BASE, '\n'); // New line carriage
 	UARTCharPut(UART0_BASE, '\r'); // Returns carriage to left of terminal.
+	
+	isComputerTurn = false;
+	isPlayerTurn = true;
 }
 
 bool checkWin() {
@@ -517,22 +508,49 @@ void checkEndGame() {
 	if (checkWin()) {
 		if (playerWin) {
 			for (int i = 0; i < 9; i++) {
-				UARTCharPut(UART0_BASE, playerWinMessage[i]);
+				//UARTCharPut(UART0_BASE, playerWinMessage[i]);
 			}
 		}
 		else if (computerWin) {
 			for (int i = 0; i < 19; i++) {
-				UARTCharPut(UART0_BASE, computerWinMessage[i]);
+				//UARTCharPut(UART0_BASE, computerWinMessage[i]);
 			}
 		}
 		endGame = checkWin();
 	}
 }
 
+
+void GPIOPortF_Handler(void) 
+{
+		//IntDisable(INT_GPIOF);
+		NVIC_EN0_R &= ~0x40000000; 
+		SysCtlDelay(53333);
+		//IntEnable(INT_GPIOF);
+		NVIC_EN0_R |= 0x40000000; 
+		
+		//SW1 (PF4) has action
+		//if((GPIO_PORTF_DATA_R & 0x10) == 0x10)
+		if(GPIO_PORTF_RIS_R&0x10)
+		{
+			Nokia5110_SetCursor(6, 0);
+			Nokia5110_OutString("SW1");
+		}
+		
+		//SW2 (PF0) has action
+		//if((GPIO_PORTF_DATA_R & 0x01) == 0x01)
+		if(GPIO_PORTF_RIS_R&0x01)			
+		{
+			Nokia5110_SetCursor(6, 2);
+			Nokia5110_OutString("SW2");
+		}
+}
+
+
 //interrupt handler
 void ADC0_Handler(void)
 {
-	
+	if (isPlayerTurn) {
 		ADCIntClear(ADC0_BASE, 2);
 		ADCProcessorTrigger(ADC0_BASE, 2);
 	
@@ -564,6 +582,8 @@ void ADC0_Handler(void)
 	
 		// Default (In Middle)
 		if (y_volt <= 2.3 && y_volt >= 1 && x_volt <= 2.3 && x_volt >= 1) {
+			choice = 5;
+			
 			Nokia5110_SetCursor(0, 0);
 			Nokia5110_OutString(" ");
 			Nokia5110_SetCursor(2, 0);
@@ -585,12 +605,23 @@ void ADC0_Handler(void)
 			
 			Nokia5110_SetCursor(2, 2);
 			Nokia5110_OutChar(playerSign);
+			
+			/*
+			//SW2 is pressed
+			if((GPIO_PORTF_DATA_R&0x01)==0x00) {
+				gameBoard[2][2] = 'O';
+				Nokia5110_Clear();
+				drawBoard();
+			}
+			*/
 		}
 		
 		// Diagonal Cases
 		
 		// Goes down
 		else if (y_volt > 2.3) {
+			choice = 8;
+			
 			Nokia5110_SetCursor(0, 0);
 			Nokia5110_OutString(" ");
 			Nokia5110_SetCursor(2, 0);
@@ -615,6 +646,8 @@ void ADC0_Handler(void)
 		}
 		// Goes up
 		else if (y_volt < 1) {
+			choice = 2;
+			
 			Nokia5110_SetCursor(0, 0);
 			Nokia5110_OutString(" ");
 			Nokia5110_SetCursor(4, 0);
@@ -640,6 +673,8 @@ void ADC0_Handler(void)
 		
 		// Goes Left
 		else if (x_volt > 2.3) {
+			choice = 4;
+			
 			Nokia5110_SetCursor(0, 0);
 			Nokia5110_OutString(" ");
 			Nokia5110_SetCursor(2, 0);
@@ -665,6 +700,8 @@ void ADC0_Handler(void)
 		
 		// Goes Right
 		else if (x_volt < 1) {
+			choice = 6;
+			
 			Nokia5110_SetCursor(0, 0);
 			Nokia5110_OutString(" ");
 			Nokia5110_SetCursor(2, 0);
@@ -688,10 +725,12 @@ void ADC0_Handler(void)
 			Nokia5110_OutChar(playerSign);
 		}
 		else {
+			choice = 0;
 			Nokia5110_Clear();
 			Nokia5110_SetCursor(0, 0);
 			Nokia5110_OutString("ERROR!");
 		}
+	}
 	
 		//SysCtlDelay(SysCtlClockGet() / (1 * 3)); //delay ~1000 msec = 1 second
 	
@@ -726,6 +765,7 @@ void ADC0_Handler(void)
 		*/
 }
 
+/*
 // INT. HANDLER  0A
 void Timer0A_Handler(void)
 {
@@ -739,6 +779,8 @@ void Timer0A_Handler(void)
 		testCondition = false;
 	}
 }
+*/
+
 /*
 void UARTIntHandler(void)
 {
@@ -1014,27 +1056,28 @@ void Nokia5110_DrawFullImage(const char *ptr){
 
 int main(void) 
 {
-		PortFunctionInit();
-		ADC0_Init();
-		ADC1_Init();
-		Nokia5110_Init();
-    SysCtlClockSet(SYSCTL_SYSDIV_1 | SYSCTL_USE_PLL | SYSCTL_OSC_INT | SYSCTL_XTAL_16MHZ);
-		//unsigned long period = SysCtlClockGet()/2; // reload timer0A
-		//Timer0A_Init(period);
-
 		// --- GAME INITIALIZATION --- //
-    Nokia5110_Clear();
+		Nokia5110_Init();
+		Nokia5110_Clear();
 		// Draw Title Screen
 		// Delay for a bit.
 		// Start game (draw board)
 		// OPTIONAL: Ask which sign to use, "X" or "O" and assign to playerSign, and other to computerSign.	
 		drawBoard();
-		
-		IntMasterEnable(); //enable processor interrupts
-		ADCProcessorTrigger(ADC0_BASE, 2);
-		ADCProcessorTrigger(ADC1_BASE, 2);
 	
-		//isPlayerTurn = true;
+		PortFunctionInit();
+		Interrupt_Init();
+		ADC0_Init();
+		ADC1_Init();
+		SysCtlClockSet(SYSCTL_SYSDIV_1 | SYSCTL_USE_PLL | SYSCTL_OSC_INT | SYSCTL_XTAL_16MHZ);
+		IntMasterEnable(); //enable processor interrupts
+		//unsigned long period = SysCtlClockGet()/2; // reload timer0A
+		//Timer0A_Init(period);
+		//ADCProcessorTrigger(ADC0_BASE, 2);
+		//ADCProcessorTrigger(ADC1_BASE, 2);
+		
+	
+		isPlayerTurn = true;
 		
     while (1)
     {
