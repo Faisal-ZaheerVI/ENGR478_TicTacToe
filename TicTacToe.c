@@ -284,8 +284,6 @@ bool playerWin = false;
 bool computerWin = false;
 bool endGame = false;
 
-bool testCondition = false;
-
 // Port Init
 void PortFunctionInit(void)
 {
@@ -473,29 +471,6 @@ void updateComputerPos(int position) {
 	}
 }
 
-void computerTurn() {	
-	int rand();
-	int compInput = rand() % 9 + 1;
-	
-	bool posOpen = checkOpenPosition(compInput);
-	while (!posOpen) {
-		compInput = rand() % 9 + 1;
-		posOpen = checkOpenPosition(compInput);
-	}
-	updateComputerPos(compInput);
-	char computerInput = compInput+'0';
-	
-	SysCtlDelay(SysCtlClockGet() / (1 * 3)); //delay ~1000 msec = 1 second
-	
-	// "The computer chose: # "
-	for (int i = 0; i < 20; i++) {
-		//UARTCharPut(UART0_BASE, computerChoiceMessage[i]);
-	}
-	
-	isComputerTurn = false;
-	isPlayerTurn = true;
-}
-
 bool checkWin() {
 	// Checks if the player has won the game.
 	if ((gameBoard[0][0] == playerSign && gameBoard[2][2] == playerSign && gameBoard[4][4] == playerSign)
@@ -530,25 +505,51 @@ bool checkWin() {
 void checkEndGame() {
 	if (checkWin()) {
 		if (playerWin) {
-			for (int i = 0; i < 9; i++) {
-				//UARTCharPut(UART0_BASE, playerWinMessage[i]);
-			}
+			Nokia5110_SetCursor(6, 2);
+			Nokia5110_OutString("You");
+			Nokia5110_SetCursor(6, 3);
+			Nokia5110_OutString("Win!");
 		}
 		else if (computerWin) {
-			for (int i = 0; i < 19; i++) {
-				//UARTCharPut(UART0_BASE, computerWinMessage[i]);
-			}
+			Nokia5110_SetCursor(6, 2);
+			Nokia5110_OutString("You");
+			Nokia5110_SetCursor(6, 3);
+			Nokia5110_OutString("Lose.");
 		}
 		endGame = checkWin();
 	}
 }
 
+void computerTurn() {	
+	int rand();
+	int compInput = rand() % 9 + 1;
+	
+	bool posOpen = checkOpenPosition(compInput);
+	while (!posOpen) {
+		compInput = rand() % 9 + 1;
+		posOpen = checkOpenPosition(compInput);
+	}
+	updateComputerPos(compInput);
+	char computerInput = compInput+'0';
+	
+	//SysCtlDelay(SysCtlClockGet() / (1 * 3)); //delay ~1000 msec = 1 second
+	
+	choiceMade = true;
+	isComputerTurn = false;
+	
+	if (!isComputerTurn && choiceMade) {
+		checkEndGame();
+		drawBoard();
+		choiceMade = false;
+		isPlayerTurn = true;
+	}
+}
 
 void GPIOPortF_Handler(void) 
 {
 		//IntDisable(INT_GPIOF);
 		NVIC_EN0_R &= ~0x40000000; 
-		SysCtlDelay(53333);
+		SysCtlDelay(160000);
 		//IntEnable(INT_GPIOF);
 		NVIC_EN0_R |= 0x40000000; 
 		
@@ -564,8 +565,15 @@ void GPIOPortF_Handler(void)
 		//if((GPIO_PORTF_DATA_R & 0x01) == 0x01)
 		if(GPIO_PORTF_RIS_R&0x01)			
 		{
-			Nokia5110_SetCursor(6, 2);
+			Nokia5110_SetCursor(6, 1);
 			Nokia5110_OutString("Two!");
+			if (!isPlayerTurn && choiceMade) {
+				checkEndGame();
+				drawBoard();
+				choiceMade = false;
+				isComputerTurn = true;
+				computerTurn();
+			}
 		}
 }
 
@@ -1215,15 +1223,18 @@ int main(void)
     while (1)
     {
 			
-			if (isPlayerTurn && choiceMade) {
+			if (!isPlayerTurn && choiceMade) {
+				checkEndGame();
 				drawBoard();
 				choiceMade = false;
 				isComputerTurn = true;
-				//computerTurn();
+				computerTurn();
 			}
-			else if (isComputerTurn && choiceMade) {
+			else if (!isComputerTurn && choiceMade) {
+				checkEndGame();
 				drawBoard();
 				choiceMade = false;
+				isPlayerTurn = true;
 			}
 			
 			// END
