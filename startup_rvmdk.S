@@ -78,7 +78,7 @@ __heap_limit
 ;
 ;******************************************************************************
 		EXTERN  ADC0_Handler
-		EXTERN	Timer0A_Handler
+		EXTERN	GPIOPortF_Handler
 ;******************************************************************************
 ;
 ; The vector table.
@@ -121,7 +121,7 @@ __Vectors
         DCD     ADC0_Handler           		; ADC Sequence 2
         DCD     IntDefaultHandler           ; ADC Sequence 3
         DCD     IntDefaultHandler           ; Watchdog timer
-        DCD     Timer0A_Handler           	; Timer 0 subtimer A
+        DCD     IntDefaultHandler           ; Timer 0 subtimer A
         DCD     IntDefaultHandler           ; Timer 0 subtimer B
         DCD     IntDefaultHandler           ; Timer 1 subtimer A
         DCD     IntDefaultHandler           ; Timer 1 subtimer B
@@ -132,7 +132,7 @@ __Vectors
         DCD     IntDefaultHandler           ; Analog Comparator 2
         DCD     IntDefaultHandler           ; System Control (PLL, OSC, BO)
         DCD     IntDefaultHandler           ; FLASH Control
-        DCD     IntDefaultHandler           ; GPIO Port F
+        DCD     GPIOPortF_Handler           ; GPIO Port F
         DCD     IntDefaultHandler           ; GPIO Port G
         DCD     IntDefaultHandler           ; GPIO Port H
         DCD     IntDefaultHandler           ; UART2 Rx and Tx
