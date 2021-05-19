@@ -422,6 +422,29 @@ bool checkOpenPosition(int position) {
 	return openSpace;
 }
 
+void clearBoard() {
+	Nokia5110_SetCursor(0, 0);
+	Nokia5110_OutString(" ");
+	Nokia5110_SetCursor(2, 0);
+	Nokia5110_OutString(" ");
+	Nokia5110_SetCursor(4, 0);
+	Nokia5110_OutString(" ");
+	
+	Nokia5110_SetCursor(0, 2);
+	Nokia5110_OutString(" ");
+	Nokia5110_SetCursor(2, 2);
+	Nokia5110_OutString(" ");
+	Nokia5110_SetCursor(4, 2);
+	Nokia5110_OutString(" ");
+	
+	Nokia5110_SetCursor(0, 4);
+	Nokia5110_OutString(" ");
+	Nokia5110_SetCursor(2, 4);
+	Nokia5110_OutString(" ");
+	Nokia5110_SetCursor(4, 4);
+	Nokia5110_OutString(" ");
+}
+
 void updatePos(int position) {
 	switch (position) {
 		case 1: gameBoard[0][0] = playerSign; Nokia5110_SetCursor(0, 0); Nokia5110_OutChar(playerSign); break;
@@ -580,8 +603,85 @@ void ADC0_Handler(void)
 			Nokia5110_OutString(" ");
 		*/
 	
+		/* --- Diagonal Cases --- */
+		// Top Left
+		if (x_volt >= 2.8 && y_volt <= 0.5) {
+			choice = 3;
+			bool posOpen = checkOpenPosition(choice);
+			if (posOpen) {
+				clearBoard();
+				
+				Nokia5110_SetCursor(0, 0);
+				Nokia5110_OutChar(playerSign);
+				
+				//SW2 is pressed
+				if(GPIO_PORTF_RIS_R&0x01 && !choiceMade) {
+						choiceMade = true;
+						updatePos(1);
+						isPlayerTurn = false;
+				}
+			}
+		}
+		
+		// Top Right
+		else if (x_volt <= 0.5 && y_volt <= 0.5) {
+			choice = 3;
+			bool posOpen = checkOpenPosition(choice);
+			if (posOpen) {
+				clearBoard();
+				
+				Nokia5110_SetCursor(4, 0);
+				Nokia5110_OutChar(playerSign);
+				
+				//SW2 is pressed
+				if(GPIO_PORTF_RIS_R&0x01 && !choiceMade) {
+						choiceMade = true;
+						updatePos(3);
+						isPlayerTurn = false;
+				}
+			}
+		}
+		
+		// Bottom Left
+		else if (x_volt >= 2.8 && y_volt >= 2.8) {
+			choice = 7;
+			bool posOpen = checkOpenPosition(choice);
+			if (posOpen) {
+				clearBoard();
+				
+				Nokia5110_SetCursor(0, 4);
+				Nokia5110_OutChar(playerSign);
+				
+				//SW2 is pressed
+				if(GPIO_PORTF_RIS_R&0x01 && !choiceMade) {
+						choiceMade = true;
+						updatePos(7);
+						isPlayerTurn = false;
+				}
+			}
+		}
+		
+		// Bottom Right
+		else if (x_volt <= 0.5 && y_volt >= 2.8) {
+			choice = 9;
+			bool posOpen = checkOpenPosition(choice);
+			if (posOpen) {
+				clearBoard();
+				
+				Nokia5110_SetCursor(4, 4);
+				Nokia5110_OutChar(playerSign);
+				
+				//SW2 is pressed
+				if(GPIO_PORTF_RIS_R&0x01 && !choiceMade) {
+						choiceMade = true;
+						updatePos(9);
+						isPlayerTurn = false;
+				}
+			}
+		}
+	
 		// Default (In Middle)
-		if (y_volt <= 2.3 && y_volt >= 1 && x_volt <= 2.3 && x_volt >= 1) {
+		else if (y_volt <= 2.3 && y_volt >= 1 && x_volt <= 2.3 && x_volt >= 1) {
 			choice = 5;
 			bool posOpen = checkOpenPosition(choice);
 			if (posOpen) {
@@ -615,8 +715,6 @@ void ADC0_Handler(void)
 				}
 			}
 		}
-		
-		// Diagonal Cases
 		
 		// Goes down
 		else if (y_volt > 2.3) {
