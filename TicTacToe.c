@@ -279,6 +279,7 @@ float x_volt;
 float y_volt;
 bool isPlayerTurn = false;
 bool isComputerTurn = false;
+bool choiceMade = false;
 bool playerWin = false;
 bool computerWin = false;
 bool endGame = false;
@@ -423,29 +424,29 @@ bool checkOpenPosition(int position) {
 
 void updatePos(int position) {
 	switch (position) {
-		case 1: gameBoard[0][0] = playerSign; break;
-		case 2: gameBoard[0][2] = playerSign; break;
-		case 3: gameBoard[0][4] = playerSign; break;
-		case 4: gameBoard[2][0] = playerSign; break;
-		case 5: gameBoard[2][2] = playerSign; break;
-		case 6: gameBoard[2][4] = playerSign; break;
-		case 7: gameBoard[4][0] = playerSign; break;
-		case 8: gameBoard[4][2] = playerSign; break;
-		case 9: gameBoard[4][4] = playerSign; break;
+		case 1: gameBoard[0][0] = playerSign; Nokia5110_SetCursor(0, 0); Nokia5110_OutChar(playerSign); break;
+		case 2: gameBoard[0][2] = playerSign; Nokia5110_SetCursor(2, 0); Nokia5110_OutChar(playerSign); break;
+		case 3: gameBoard[0][4] = playerSign; Nokia5110_SetCursor(4, 0); Nokia5110_OutChar(playerSign); break;
+		case 4: gameBoard[2][0] = playerSign; Nokia5110_SetCursor(0, 2); Nokia5110_OutChar(playerSign); break;
+		case 5: gameBoard[2][2] = playerSign; Nokia5110_SetCursor(2, 2); Nokia5110_OutChar(playerSign); break;
+		case 6: gameBoard[2][4] = playerSign; Nokia5110_SetCursor(4, 2); Nokia5110_OutChar(playerSign); break;
+		case 7: gameBoard[4][0] = playerSign; Nokia5110_SetCursor(0, 4); Nokia5110_OutChar(playerSign); break;
+		case 8: gameBoard[4][2] = playerSign; Nokia5110_SetCursor(2, 4); Nokia5110_OutChar(playerSign); break;
+		case 9: gameBoard[4][4] = playerSign; Nokia5110_SetCursor(4, 4); Nokia5110_OutChar(playerSign); break;
 	}
 }
 
 void updateComputerPos(int position) {
 	switch (position) {
-		case 1: gameBoard[0][0] = computerSign; break;
-		case 2: gameBoard[0][2] = computerSign; break;
-		case 3: gameBoard[0][4] = computerSign; break;
-		case 4: gameBoard[2][0] = computerSign; break;
-		case 5: gameBoard[2][2] = computerSign; break;
-		case 6: gameBoard[2][4] = computerSign; break;
-		case 7: gameBoard[4][0] = computerSign; break;
-		case 8: gameBoard[4][2] = computerSign; break;
-		case 9: gameBoard[4][4] = computerSign; break;
+		case 1: gameBoard[0][0] = computerSign; Nokia5110_SetCursor(0, 0); Nokia5110_OutChar(computerSign); break;
+		case 2: gameBoard[0][2] = computerSign; Nokia5110_SetCursor(2, 0); Nokia5110_OutChar(computerSign); break;
+		case 3: gameBoard[0][4] = computerSign; Nokia5110_SetCursor(4, 0); Nokia5110_OutChar(computerSign); break;
+		case 4: gameBoard[2][0] = computerSign; Nokia5110_SetCursor(0, 2); Nokia5110_OutChar(computerSign); break;
+		case 5: gameBoard[2][2] = computerSign; Nokia5110_SetCursor(2, 2); Nokia5110_OutChar(computerSign); break;
+		case 6: gameBoard[2][4] = computerSign; Nokia5110_SetCursor(4, 2); Nokia5110_OutChar(computerSign); break;
+		case 7: gameBoard[4][0] = computerSign; Nokia5110_SetCursor(0, 4); Nokia5110_OutChar(computerSign); break;
+		case 8: gameBoard[4][2] = computerSign; Nokia5110_SetCursor(2, 4); Nokia5110_OutChar(computerSign); break;
+		case 9: gameBoard[4][4] = computerSign; Nokia5110_SetCursor(4, 4); Nokia5110_OutChar(computerSign); break;
 	}
 }
 
@@ -460,14 +461,13 @@ void computerTurn() {
 	}
 	updateComputerPos(compInput);
 	char computerInput = compInput+'0';
+	
+	SysCtlDelay(SysCtlClockGet() / (1 * 3)); //delay ~1000 msec = 1 second
+	
 	// "The computer chose: # "
 	for (int i = 0; i < 20; i++) {
 		//UARTCharPut(UART0_BASE, computerChoiceMessage[i]);
 	}
-	UARTCharPut(UART0_BASE, computerInput);
-	
-	UARTCharPut(UART0_BASE, '\n'); // New line carriage
-	UARTCharPut(UART0_BASE, '\r'); // Returns carriage to left of terminal.
 	
 	isComputerTurn = false;
 	isPlayerTurn = true;
@@ -534,7 +534,7 @@ void GPIOPortF_Handler(void)
 		if(GPIO_PORTF_RIS_R&0x10)
 		{
 			Nokia5110_SetCursor(6, 0);
-			Nokia5110_OutString("SW1");
+			Nokia5110_OutString("One!");
 		}
 		
 		//SW2 (PF0) has action
@@ -542,7 +542,7 @@ void GPIOPortF_Handler(void)
 		if(GPIO_PORTF_RIS_R&0x01)			
 		{
 			Nokia5110_SetCursor(6, 2);
-			Nokia5110_OutString("SW2");
+			Nokia5110_OutString("Two!");
 		}
 }
 
@@ -583,37 +583,37 @@ void ADC0_Handler(void)
 		// Default (In Middle)
 		if (y_volt <= 2.3 && y_volt >= 1 && x_volt <= 2.3 && x_volt >= 1) {
 			choice = 5;
-			
-			Nokia5110_SetCursor(0, 0);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(2, 0);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(4, 0);
-			Nokia5110_OutString(" ");
-			
-			Nokia5110_SetCursor(0, 2);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(4, 2);
-			Nokia5110_OutString(" ");
-			
-			Nokia5110_SetCursor(0, 4);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(2, 4);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(4, 4);
-			Nokia5110_OutString(" ");
-			
-			Nokia5110_SetCursor(2, 2);
-			Nokia5110_OutChar(playerSign);
-			
-			/*
-			//SW2 is pressed
-			if((GPIO_PORTF_DATA_R&0x01)==0x00) {
-				gameBoard[2][2] = 'O';
-				Nokia5110_Clear();
-				drawBoard();
+			bool posOpen = checkOpenPosition(choice);
+			if (posOpen) {
+				Nokia5110_SetCursor(0, 0);
+				Nokia5110_OutString(" ");
+				Nokia5110_SetCursor(2, 0);
+				Nokia5110_OutString(" ");
+				Nokia5110_SetCursor(4, 0);
+				Nokia5110_OutString(" ");
+				
+				Nokia5110_SetCursor(0, 2);
+				Nokia5110_OutString(" ");
+				Nokia5110_SetCursor(4, 2);
+				Nokia5110_OutString(" ");
+				
+				Nokia5110_SetCursor(0, 4);
+				Nokia5110_OutString(" ");
+				Nokia5110_SetCursor(2, 4);
+				Nokia5110_OutString(" ");
+				Nokia5110_SetCursor(4, 4);
+				Nokia5110_OutString(" ");
+				
+				Nokia5110_SetCursor(2, 2);
+				Nokia5110_OutChar(playerSign);
+				
+				//SW2 is pressed
+				if(GPIO_PORTF_RIS_R&0x01 && !choiceMade) {
+						choiceMade = true;
+						updatePos(5);
+						isPlayerTurn = false;
+				}
 			}
-			*/
 		}
 		
 		// Diagonal Cases
@@ -621,114 +621,150 @@ void ADC0_Handler(void)
 		// Goes down
 		else if (y_volt > 2.3) {
 			choice = 8;
-			
-			Nokia5110_SetCursor(0, 0);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(2, 0);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(4, 0);
-			Nokia5110_OutString(" ");
-			
-			Nokia5110_SetCursor(0, 2);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(2, 2);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(4, 2);
-			Nokia5110_OutString(" ");
-			
-			Nokia5110_SetCursor(0, 4);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(4, 4);
-			Nokia5110_OutString(" ");
-			
-			Nokia5110_SetCursor(2, 4);
-			Nokia5110_OutChar(playerSign);
+			bool posOpen = checkOpenPosition(choice);
+			if (posOpen) {
+				Nokia5110_SetCursor(0, 0);
+				Nokia5110_OutString(" ");
+				Nokia5110_SetCursor(2, 0);
+				Nokia5110_OutString(" ");
+				Nokia5110_SetCursor(4, 0);
+				Nokia5110_OutString(" ");
+				
+				Nokia5110_SetCursor(0, 2);
+				Nokia5110_OutString(" ");
+				Nokia5110_SetCursor(2, 2);
+				Nokia5110_OutString(" ");
+				Nokia5110_SetCursor(4, 2);
+				Nokia5110_OutString(" ");
+				
+				Nokia5110_SetCursor(0, 4);
+				Nokia5110_OutString(" ");
+				Nokia5110_SetCursor(4, 4);
+				Nokia5110_OutString(" ");
+				
+				Nokia5110_SetCursor(2, 4);
+				Nokia5110_OutChar(playerSign);
+				
+				//SW2 is pressed
+				if(GPIO_PORTF_RIS_R&0x01 && !choiceMade) {
+					choiceMade = true;
+					updatePos(8);
+					isPlayerTurn = false;
+				}
+			}
 		}
 		// Goes up
 		else if (y_volt < 1) {
 			choice = 2;
-			
-			Nokia5110_SetCursor(0, 0);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(4, 0);
-			Nokia5110_OutString(" ");
-			
-			Nokia5110_SetCursor(0, 2);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(2, 2);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(4, 2);
-			Nokia5110_OutString(" ");
-			
-			Nokia5110_SetCursor(0, 4);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(2, 4);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(4, 4);
-			Nokia5110_OutString(" ");
-			
-			Nokia5110_SetCursor(2, 0);
-			Nokia5110_OutChar(playerSign);
+			bool posOpen = checkOpenPosition(choice);
+			if (posOpen) {
+				Nokia5110_SetCursor(0, 0);
+				Nokia5110_OutString(" ");
+				Nokia5110_SetCursor(4, 0);
+				Nokia5110_OutString(" ");
+				
+				Nokia5110_SetCursor(0, 2);
+				Nokia5110_OutString(" ");
+				Nokia5110_SetCursor(2, 2);
+				Nokia5110_OutString(" ");
+				Nokia5110_SetCursor(4, 2);
+				Nokia5110_OutString(" ");
+				
+				Nokia5110_SetCursor(0, 4);
+				Nokia5110_OutString(" ");
+				Nokia5110_SetCursor(2, 4);
+				Nokia5110_OutString(" ");
+				Nokia5110_SetCursor(4, 4);
+				Nokia5110_OutString(" ");
+				
+				Nokia5110_SetCursor(2, 0);
+				Nokia5110_OutChar(playerSign);
+				
+				//SW2 is pressed
+				if(GPIO_PORTF_RIS_R&0x01) {
+					choiceMade = true;
+					updatePos(2);
+					isPlayerTurn = false;
+				}
+			}
 		}
 		
 		// Goes Left
 		else if (x_volt > 2.3) {
 			choice = 4;
-			
-			Nokia5110_SetCursor(0, 0);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(2, 0);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(4, 0);
-			Nokia5110_OutString(" ");
-			
-			Nokia5110_SetCursor(2, 2);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(4, 2);
-			Nokia5110_OutString(" ");
-			
-			Nokia5110_SetCursor(0, 4);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(2, 4);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(4, 4);
-			Nokia5110_OutString(" ");
-			
-			Nokia5110_SetCursor(0, 2);
-			Nokia5110_OutChar(playerSign);
+			bool posOpen = checkOpenPosition(choice);
+			if (posOpen) {
+				Nokia5110_SetCursor(0, 0);
+				Nokia5110_OutString(" ");
+				Nokia5110_SetCursor(2, 0);
+				Nokia5110_OutString(" ");
+				Nokia5110_SetCursor(4, 0);
+				Nokia5110_OutString(" ");
+				
+				Nokia5110_SetCursor(2, 2);
+				Nokia5110_OutString(" ");
+				Nokia5110_SetCursor(4, 2);
+				Nokia5110_OutString(" ");
+				
+				Nokia5110_SetCursor(0, 4);
+				Nokia5110_OutString(" ");
+				Nokia5110_SetCursor(2, 4);
+				Nokia5110_OutString(" ");
+				Nokia5110_SetCursor(4, 4);
+				Nokia5110_OutString(" ");
+				
+				Nokia5110_SetCursor(0, 2);
+				Nokia5110_OutChar(playerSign);
+				
+				//SW2 is pressed
+				if(GPIO_PORTF_RIS_R&0x01 && !choiceMade) {
+					choiceMade = true;
+					updatePos(4);
+					isPlayerTurn = false;
+				}
+			}
 		}
 		
 		// Goes Right
 		else if (x_volt < 1) {
 			choice = 6;
-			
-			Nokia5110_SetCursor(0, 0);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(2, 0);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(4, 0);
-			Nokia5110_OutString(" ");
-			
-			Nokia5110_SetCursor(0, 2);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(2, 2);
-			Nokia5110_OutString(" ");
-			
-			Nokia5110_SetCursor(0, 4);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(2, 4);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(4, 4);
-			Nokia5110_OutString(" ");
-			
-			Nokia5110_SetCursor(4, 2);
-			Nokia5110_OutChar(playerSign);
+			bool posOpen = checkOpenPosition(choice);
+			if (posOpen) {
+				Nokia5110_SetCursor(0, 0);
+				Nokia5110_OutString(" ");
+				Nokia5110_SetCursor(2, 0);
+				Nokia5110_OutString(" ");
+				Nokia5110_SetCursor(4, 0);
+				Nokia5110_OutString(" ");
+				
+				Nokia5110_SetCursor(0, 2);
+				Nokia5110_OutString(" ");
+				Nokia5110_SetCursor(2, 2);
+				Nokia5110_OutString(" ");
+				
+				Nokia5110_SetCursor(0, 4);
+				Nokia5110_OutString(" ");
+				Nokia5110_SetCursor(2, 4);
+				Nokia5110_OutString(" ");
+				Nokia5110_SetCursor(4, 4);
+				Nokia5110_OutString(" ");
+				
+				Nokia5110_SetCursor(4, 2);
+				Nokia5110_OutChar(playerSign);
+				
+				//SW2 is pressed
+				if(GPIO_PORTF_RIS_R&0x01 && !choiceMade) {
+					choiceMade = true;
+					updatePos(6);
+					isPlayerTurn = false;
+				}
+			}
 		}
 		else {
 			choice = 0;
 			Nokia5110_Clear();
-			Nokia5110_SetCursor(0, 0);
-			Nokia5110_OutString("ERROR!");
+			Nokia5110_SetCursor(6, 0);
+			Nokia5110_OutString("ERROR");
 		}
 	}
 	
@@ -935,7 +971,7 @@ void Nokia5110_Init(void){
   lcdwrite(COMMAND, 0x0C);              // set display control to normal mode: 0x0D for inverse
 }
 
-//********Nokia5110_OutChar*****************
+//********Nokia5110_OutChar*****************20
 // Print a character to the Nokia 5110 48x84 LCD.  The
 // character will be printed at the current cursor position,
 // the cursor will automatically be updated, and it will
@@ -1073,22 +1109,25 @@ int main(void)
 		IntMasterEnable(); //enable processor interrupts
 		//unsigned long period = SysCtlClockGet()/2; // reload timer0A
 		//Timer0A_Init(period);
-		//ADCProcessorTrigger(ADC0_BASE, 2);
-		//ADCProcessorTrigger(ADC1_BASE, 2);
+		ADCProcessorTrigger(ADC0_BASE, 2);
+		ADCProcessorTrigger(ADC1_BASE, 2);
 		
-	
 		isPlayerTurn = true;
 		
     while (1)
     {
-			/*
-			if (playerTurn) {
-				
+			
+			if (isPlayerTurn && choiceMade) {
+				drawBoard();
+				choiceMade = false;
+				isComputerTurn = true;
+				//computerTurn();
 			}
-			else if (computerTurn) {
-				
+			else if (isComputerTurn && choiceMade) {
+				drawBoard();
+				choiceMade = false;
 			}
-			*/
+			
 			// END
     }
 }
