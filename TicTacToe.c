@@ -14,7 +14,6 @@
 #include "inc/hw_gpio.h"
 #include "inc/tm4c123gh6pm.h"
 #include "Nokia5110.h"
-#include "bitmapPhotos.h"
 
 // Nokia5110.c
 // Runs on LM4F120/TM4C123
@@ -557,16 +556,16 @@ void GPIOPortF_Handler(void)
 		//if((GPIO_PORTF_DATA_R & 0x10) == 0x10)
 		if(GPIO_PORTF_RIS_R&0x10)
 		{
-			Nokia5110_SetCursor(6, 0);
-			Nokia5110_OutString("One!");
+			//Nokia5110_SetCursor(6, 0);
+			//Nokia5110_OutString("One!");
 		}
 		
 		//SW2 (PF0) has action
 		//if((GPIO_PORTF_DATA_R & 0x01) == 0x01)
 		if(GPIO_PORTF_RIS_R&0x01)			
 		{
-			Nokia5110_SetCursor(6, 1);
-			Nokia5110_OutString("Two!");
+			//Nokia5110_SetCursor(6, 1);
+			//Nokia5110_OutString("Two!");
 			if (!isPlayerTurn && choiceMade) {
 				checkEndGame();
 				drawBoard();
