@@ -276,6 +276,8 @@ char gameBoard [5][5] = {
 int userInput;
 char playerSign = 'X';
 char computerSign = 'O';
+bool isPlayerTurn = false;
+bool isComputerTurn = false;
 
 char userPrompt[35] = "Choose a playable position (1-9): ";
 char errorMessage[44] = "Invalid position, select another position: ";
@@ -346,8 +348,12 @@ void ADC0_Init(void)
 
 		ADCSequenceDisable(ADC0_BASE, 2); //disables ADC0 before the conf. is complete
 		ADCSequenceConfigure(ADC0_BASE, 2, ADC_TRIGGER_PROCESSOR, 0); // will use ADC0, SS1, processor-trigger, priority 0
-		ADCSequenceStepConfigure(ADC0_BASE, 2, 0, ADC_CTL_CH2 | ADC_CTL_IE | ADC_CTL_END); // Ch. 2 = PE1
-		//IntPrioritySet(INT_ADC0SS2, 0x00);  	 // configure ADC0 SS2 interrupt priority as 0
+		
+		ADCSequenceStepConfigure(ADC0_BASE, 2, 0, ADC_CTL_CH2);
+		ADCSequenceStepConfigure(ADC0_BASE, 2, 1, ADC_CTL_CH2);
+		ADCSequenceStepConfigure(ADC0_BASE, 2, 2, ADC_CTL_CH2);
+		ADCSequenceStepConfigure(ADC0_BASE, 2, 3, ADC_CTL_CH2 | ADC_CTL_IE | ADC_CTL_END); // Ch. 2 = PE1
+		IntPrioritySet(INT_ADC0SS2, 0x00);  	 // configure ADC0 SS2 interrupt priority as 0
 		IntEnable(INT_ADC0SS2);    				// enable interrupt 31 in NVIC (ADC0 SS2)
 		ADCIntEnableEx(ADC0_BASE, ADC_INT_SS2);      // arm interrupt of ADC0 SS2
 	
@@ -364,8 +370,11 @@ void ADC1_Init(void)
 
 		ADCSequenceDisable(ADC1_BASE, 2); //disables ADC0 before the conf. is complete
 		ADCSequenceConfigure(ADC1_BASE, 2, ADC_TRIGGER_PROCESSOR, 0); // will use ADC0, SS1, processor-trigger, priority 0
-		ADCSequenceStepConfigure(ADC1_BASE, 2, 1, ADC_CTL_CH1 | ADC_CTL_IE | ADC_CTL_END); // Ch. 1 = PE2 (Y axis.)
-		//IntPrioritySet(INT_ADC1SS2, 0x00);  	 // configure ADC0 SS2 interrupt priority as 0
+		ADCSequenceStepConfigure(ADC1_BASE, 2, 0, ADC_CTL_CH1);
+		ADCSequenceStepConfigure(ADC1_BASE, 2, 1, ADC_CTL_CH1);
+		ADCSequenceStepConfigure(ADC1_BASE, 2, 2, ADC_CTL_CH1);
+		ADCSequenceStepConfigure(ADC1_BASE, 2, 3, ADC_CTL_CH1 | ADC_CTL_IE | ADC_CTL_END); // Ch. 1 = PE2 (Y axis.)
+		IntPrioritySet(INT_ADC1SS2, 0x00);  	 // configure ADC0 SS2 interrupt priority as 0
 		IntEnable(INT_ADC1SS2);    				// enable interrupt 31 in NVIC (ADC0 SS2)
 		ADCIntEnableEx(ADC1_BASE, ADC_INT_SS2);      // arm interrupt of ADC0 SS2
 	
@@ -535,8 +544,8 @@ void ADC0_Handler(void)
 		ADCSequenceDataGet(ADC1_BASE, 2, ui32ADC1Value);	// gives Y-axis reading
 	
 		// Grabs X&Y readings -> integers
-		ui32_Xpin = ui32ADC0Value[0];	
-		ui32_Ypin = ui32ADC1Value[0];
+		ui32_Xpin = (ui32ADC0Value[0] + ui32ADC0Value[1] + ui32ADC0Value[2] + ui32ADC0Value[3]) / 4;	
+		ui32_Ypin = (ui32ADC1Value[0] + ui32ADC1Value[1] + ui32ADC1Value[2] + ui32ADC1Value[3]) / 4;
 
 		// Converts readings to mV
 		ui32x_volt = ( (ui32_Xpin * 3.3) / 4095 );		// X mV - outputs: 0, 1, 3
@@ -544,54 +553,139 @@ void ADC0_Handler(void)
 	
 		x_volt = ( (ui32_Xpin * 3.3) / 4095 );
 		y_volt = ( (ui32_Ypin * 3.3) / 4095 );  
+		
+		/*
+			Nokia5110_SetCursor(0, 0); | Nokia5110_SetCursor(2, 0); | Nokia5110_SetCursor(4, 0);
+			Nokia5110_SetCursor(0, 2); | Nokia5110_SetCursor(2, 2); | Nokia5110_SetCursor(4, 2);
+			Nokia5110_SetCursor(0, 4); | Nokia5110_SetCursor(2, 4); | Nokia5110_SetCursor(4, 4);
+			
+			Nokia5110_OutString(" ");
+		*/
 	
-		// Default (On Options)
-		if (y_volt <= 2 && y_volt >= 1) {
+		// Default (In Middle)
+		if (y_volt <= 2.3 && y_volt >= 1 && x_volt <= 2.3 && x_volt >= 1) {
 			Nokia5110_SetCursor(0, 0);
 			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(6, 0);
+			Nokia5110_SetCursor(2, 0);
 			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(0, 4);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(5, 4);
+			Nokia5110_SetCursor(4, 0);
 			Nokia5110_OutString(" ");
 			
 			Nokia5110_SetCursor(0, 2);
-			Nokia5110_OutString("\[");
-			Nokia5110_SetCursor(8, 2);
-			Nokia5110_OutString("\]");
-		}
-		// Goes down (On Exit)
-		else if (y_volt > 2) {
-			Nokia5110_SetCursor(0, 2);
 			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(8, 2);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(0, 0);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(6, 0);
+			Nokia5110_SetCursor(4, 2);
 			Nokia5110_OutString(" ");
 			
 			Nokia5110_SetCursor(0, 4);
-			Nokia5110_OutString("\[");
-			Nokia5110_SetCursor(5, 4);
-			Nokia5110_OutString("\]");
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(2, 4);
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(4, 4);
+			Nokia5110_OutString(" ");
+			
+			Nokia5110_SetCursor(2, 2);
+			Nokia5110_OutChar(playerSign);
 		}
-		// Goes up (On Start)
+		
+		// Diagonal Cases
+		
+		// Goes down
+		else if (y_volt > 2.3) {
+			Nokia5110_SetCursor(0, 0);
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(2, 0);
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(4, 0);
+			Nokia5110_OutString(" ");
+			
+			Nokia5110_SetCursor(0, 2);
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(2, 2);
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(4, 2);
+			Nokia5110_OutString(" ");
+			
+			Nokia5110_SetCursor(0, 4);
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(4, 4);
+			Nokia5110_OutString(" ");
+			
+			Nokia5110_SetCursor(2, 4);
+			Nokia5110_OutChar(playerSign);
+		}
+		// Goes up
 		else if (y_volt < 1) {
-			Nokia5110_SetCursor(0, 2);
+			Nokia5110_SetCursor(0, 0);
 			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(8, 2);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(0, 4);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(5, 4);
+			Nokia5110_SetCursor(4, 0);
 			Nokia5110_OutString(" ");
 			
+			Nokia5110_SetCursor(0, 2);
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(2, 2);
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(4, 2);
+			Nokia5110_OutString(" ");
+			
+			Nokia5110_SetCursor(0, 4);
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(2, 4);
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(4, 4);
+			Nokia5110_OutString(" ");
+			
+			Nokia5110_SetCursor(2, 0);
+			Nokia5110_OutChar(playerSign);
+		}
+		
+		// Goes Left
+		else if (x_volt > 2.3) {
 			Nokia5110_SetCursor(0, 0);
-			Nokia5110_OutString("\[");
-			Nokia5110_SetCursor(6, 0);
-			Nokia5110_OutString("\]");
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(2, 0);
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(4, 0);
+			Nokia5110_OutString(" ");
+			
+			Nokia5110_SetCursor(2, 2);
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(4, 2);
+			Nokia5110_OutString(" ");
+			
+			Nokia5110_SetCursor(0, 4);
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(2, 4);
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(4, 4);
+			Nokia5110_OutString(" ");
+			
+			Nokia5110_SetCursor(0, 2);
+			Nokia5110_OutChar(playerSign);
+		}
+		
+		// Goes Right
+		else if (x_volt < 1) {
+			Nokia5110_SetCursor(0, 0);
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(2, 0);
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(4, 0);
+			Nokia5110_OutString(" ");
+			
+			Nokia5110_SetCursor(0, 2);
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(2, 2);
+			Nokia5110_OutString(" ");
+			
+			Nokia5110_SetCursor(0, 4);
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(2, 4);
+			Nokia5110_OutString(" ");
+			Nokia5110_SetCursor(4, 4);
+			Nokia5110_OutString(" ");
+			
+			Nokia5110_SetCursor(4, 2);
+			Nokia5110_OutChar(playerSign);
 		}
 		else {
 			Nokia5110_Clear();
@@ -659,44 +753,6 @@ void UARTIntHandler(void)
 		for (int j = 0; j < 12; j++) {
 			UARTCharPut(UART0_BASE, playerChoiceMessage[j]);
 		}
-	
-		switch (UARTCharGet(UART0_BASE)) {
-			case '1': UARTCharPutNonBlocking(UART0_BASE, '1');
-							userInput = 1;
-							break;
-			case '2': UARTCharPutNonBlocking(UART0_BASE, '2');
-							userInput = 2;
-							break;
-			case '3': UARTCharPutNonBlocking(UART0_BASE, '3');
-							userInput = 3;
-							break;
-			case '4': UARTCharPutNonBlocking(UART0_BASE, '4');
-							userInput = 4;
-							break;
-			case '5': UARTCharPutNonBlocking(UART0_BASE, '5');
-							userInput = 5;
-							break;
-			case '6': UARTCharPutNonBlocking(UART0_BASE, '6');
-							userInput = 6;
-							break;
-			case '7': UARTCharPutNonBlocking(UART0_BASE, '7');
-							userInput = 7;
-							break;
-			case '8': UARTCharPutNonBlocking(UART0_BASE, '8');
-							userInput = 8;
-							break;
-			case '9': UARTCharPutNonBlocking(UART0_BASE, '9');
-							userInput = 9;
-							break;
-			default: while (i < 44) {
-				UARTCharPut(UART0_BASE, errorMessage[i]);
-				i++;
-			}
-		}
-		
-		UARTCharPut(UART0_BASE, '\n'); // New line carriage
-		UARTCharPut(UART0_BASE, '\r'); // Returns carriage to left of terminal.
-		
 		
 		bool posOpen = checkOpenPosition(userInput);
 		while (!posOpen) {
@@ -956,109 +1012,42 @@ void Nokia5110_DrawFullImage(const char *ptr){
   }
 }
 
-int main(void) {
-	
-		/*
-		// Initialize ports and UART
-		unsigned long period = 160000; // reload timer0A
-		PortFunctionInit();
-		uart_Init();
-		ADC0_Init();
-		ADC1_Init();
-		Timer0A_Init(period);
-
-		drawBoard();
-		askUserPrompt();
-	
-    IntMasterEnable(); //enable processor interrupts
-    IntEnable(INT_UART0); //enable the UART interrupt
-    UARTIntEnable(UART0_BASE, UART_INT_RX | UART_INT_RT); //only enable RX and TX interrupts
-	
-		ADCProcessorTrigger(ADC0_BASE, 2);
-		ADCProcessorTrigger(ADC1_BASE, 2);
-		*/
+int main(void) 
+{
 		PortFunctionInit();
 		ADC0_Init();
 		ADC1_Init();
 		Nokia5110_Init();
     SysCtlClockSet(SYSCTL_SYSDIV_1 | SYSCTL_USE_PLL | SYSCTL_OSC_INT | SYSCTL_XTAL_16MHZ);
-		unsigned long period = SysCtlClockGet()/2; // reload timer0A
-		Timer0A_Init(period);
+		//unsigned long period = SysCtlClockGet()/2; // reload timer0A
+		//Timer0A_Init(period);
 
+		// --- GAME INITIALIZATION --- //
     Nokia5110_Clear();
-		
-		Nokia5110_SetCursor(1, 0);
-		Nokia5110_OutString("Start");
-		Nokia5110_SetCursor(1, 2);
-		Nokia5110_OutString("Options");
-		Nokia5110_SetCursor(1, 4);
-		Nokia5110_OutString("Exit");
+		// Draw Title Screen
+		// Delay for a bit.
+		// Start game (draw board)
+		// OPTIONAL: Ask which sign to use, "X" or "O" and assign to playerSign, and other to computerSign.	
+		drawBoard();
 		
 		IntMasterEnable(); //enable processor interrupts
 		ADCProcessorTrigger(ADC0_BASE, 2);
 		ADCProcessorTrigger(ADC1_BASE, 2);
+	
+		//isPlayerTurn = true;
 		
     while (1)
     {
 			/*
-			
-			Nokia5110_Clear();
-			
-			Nokia5110_OutString("Start");
-			Nokia5110_SetCursor(1, 2);
-			Nokia5110_OutString("Options");
-			Nokia5110_SetCursor(1, 4);
-			Nokia5110_OutString("Exit");
-
-			
-			Nokia5110_SetCursor(0, 0);
-			Nokia5110_OutString("\[");
-			Nokia5110_SetCursor(6, 0);
-			Nokia5110_OutString("\]");
-			
-			SysCtlDelay(SysCtlClockGet()/2);
-			Nokia5110_SetCursor(0, 0);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(6, 0);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(0, 2);
-			Nokia5110_OutString("\[");
-			Nokia5110_SetCursor(8, 2);
-			Nokia5110_OutString("\]");
-			
-			SysCtlDelay(SysCtlClockGet()/2);
-			Nokia5110_SetCursor(0, 2);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(8, 2);
-			Nokia5110_OutString(" ");
-			Nokia5110_SetCursor(0, 4);
-			Nokia5110_OutString("\[");
-			Nokia5110_SetCursor(5, 4);
-			Nokia5110_OutString("\]");
-			
-			SysCtlDelay(SysCtlClockGet()/2);
-			
-			*/
-			
-			/*
-			if (testCondition) {
-				Nokia5110_SetCursor(0, 0);
-				Nokia5110_OutString("\[");
-				Nokia5110_SetCursor(6, 0);
-				Nokia5110_OutString("\]");
+			if (playerTurn) {
+				
 			}
-			else if (!testCondition) {
-				Nokia5110_SetCursor(0, 0);
-				Nokia5110_OutString(" ");
-				Nokia5110_SetCursor(6, 0);
-				Nokia5110_OutString(" ");
+			else if (computerTurn) {
+				
 			}
 			*/
-			
-			
 			// END
     }
-
 }
 
 /*
