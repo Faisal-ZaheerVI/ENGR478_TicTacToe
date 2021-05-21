@@ -13,3 +13,9 @@
   <li>After any selection, the game board on the LCD will update with the current board and its updated positions.</li>
   <li>The user and computer will then play back and forth until the program detects a win condition after every turn by checking for three of the same sign (X or O) in a row in any of various directions (vertically, horizontally, and diagonally).</li>
 </ul>
+<br>
+<h4>Photos</h4>
+<p>(Insert several photos)</p>
+<br>
+<h4>Video demonstration</h4>
+<p>(Insert embedded link or similar for video demo)</p>
