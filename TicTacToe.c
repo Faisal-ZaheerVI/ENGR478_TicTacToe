@@ -16,14 +16,11 @@
 #include "Nokia5110.h"
 
 // Nokia5110.c
-// Runs on LM4F120/TM4C123
 // Use SSI0 to send an 8-bit code to the Nokia5110 48x84
 // pixel LCD to display text, images, or other information.
 // This file has been modified to work with TExaS, which
 // sets the PLL to 80 MHz, where earlier versions ran at
 // 50 MHz or less.
-// Daniel Valvano
-// December 10, 2013
 
 // Font table, initialization, and other functions based
 // off of Nokia_5110_Example from Spark Fun:
@@ -46,18 +43,6 @@
  For more information about my classes, my research, and my books, see
  http://users.ece.utexas.edu/~valvano/
  */
-
-// Blue Nokia 5110
-// ---------------
-// Signal        (Nokia 5110) LaunchPad pin
-// Reset         (RST, pin 1) connected to PA7
-// SSI0Fss       (CE,  pin 2) connected to PA3
-// Data/Command  (DC,  pin 3) connected to PA6
-// SSI0Tx        (Din, pin 4) connected to PA5
-// SSI0Clk       (Clk, pin 5) connected to PA2
-// 3.3V          (Vcc, pin 6) power
-// back light    (BL,  pin 7) not connected, consists of 4 white LEDs which draw ~80mA total
-// Ground        (Gnd, pin 8) ground
 
 // Red SparkFun Nokia 5110 (LCD-10168)
 // -----------------------------------
@@ -240,18 +225,12 @@ enum typeOfWrite{
 // transmit FIFO, configures the Data/Command pin for data,
 // and then adds the data to the transmit FIFO.
 
-/* Testing the joystick
+/* Joystick pins
 VCC - +3.3V
 GND - Ground
 X-axis: PE1
 Y-axis: PE2
 K-axis: PB5
-
-1. ADC to use joystick
-	- voltage values
-
-2. UART to see in TeraTerm
-- can use voltage to determine direction
 */
 
 uint32_t ui32ADC0Value[4]; 	// Reading of X-Axis
