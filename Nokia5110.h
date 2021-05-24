@@ -9,7 +9,7 @@
 // Nathan Seidle
 // http://dlnmh9ip6v2uc.cloudfront.net/datasheets/LCD/Monochrome/Nokia_5110_Example.pde
 
-/* This example accompanies the book
+/* The referenced example accompanies the book
    "Embedded Systems: Real Time Interfacing to Arm Cortex M Microcontrollers",
    ISBN: 978-1463590154, Jonathan Valvano, copyright (c) 2013
  Copyright 2013 by Jonathan W. Valvano, valvano@mail.utexas.edu
