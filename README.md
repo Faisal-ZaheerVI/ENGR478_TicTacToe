@@ -15,4 +15,6 @@
 </ul>
 <br>
 <h4>Video demonstration</h4>
-<p>(Insert embedded link or similar for video demo)</p>
+<video>
+
+</video>
