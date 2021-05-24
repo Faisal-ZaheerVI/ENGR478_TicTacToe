@@ -1,3 +1,10 @@
+/*
+		TIC TAC TOE GAME
+		By Faisal Zaheer and Zamar Bravo
+		ENGR 478 - 01
+		Final Term Project (Spring 2021)
+*/
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -15,7 +22,6 @@
 #include "inc/tm4c123gh6pm.h"
 #include "Nokia5110.h"
 
-// Nokia5110.c
 // Use SSI0 to send an 8-bit code to the Nokia5110 48x84
 // pixel LCD to display text, images, or other information.
 // This file has been modified to work with TExaS, which
@@ -237,8 +243,6 @@ uint32_t ui32ADC0Value[4]; 	// Reading of X-Axis
 uint32_t ui32ADC1Value[4]; 	// Reading of Y-Axis
 volatile uint32_t ui32_Xpin;
 volatile uint32_t ui32_Ypin;
-volatile uint32_t ui32x_volt;
-volatile uint32_t ui32y_volt;
 
 char gameBoard [5][5] = {
 {' ', '|', ' ', '|', ' '}, 
@@ -249,7 +253,6 @@ char gameBoard [5][5] = {
 };
 
 // Global variables.
-int allChoices[] = {1,2,3,4,5,6,7,8,9};
 int choice = 0;
 char playerSign = 'X';
 char computerSign = 'O';
@@ -268,9 +271,9 @@ void PortFunctionInit(void)
 		SysCtlPeripheralEnable(SYSCTL_PERIPH_ADC0);	// using ADC0 and ADC1
 		SysCtlPeripheralEnable(SYSCTL_PERIPH_ADC1);
 		SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOE);	// Using PE1 - X, PE2 - Y
-		SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF); // For Switches/LEDs
+		SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF); // For Switches/LEDs (Mainly SW2 switch at first)
 	
-		GPIOPinTypeADC(GPIO_PORTE_BASE, GPIO_PIN_1 | GPIO_PIN_2);
+		GPIOPinTypeADC(GPIO_PORTE_BASE, GPIO_PIN_1 | GPIO_PIN_2); // Configures PE1 and PE2 as ADC analog input pins.
 
     //First open the lock and select the bits we want to modify in the GPIO commit register.
     HWREG(GPIO_PORTF_BASE + GPIO_O_LOCK) = GPIO_LOCK_KEY;
@@ -281,7 +284,6 @@ void PortFunctionInit(void)
 	
 		//Enable pull-up on PF4 and PF0 (2^4 = 0x10 and 2^0 = 0x01 respectively)
 		GPIO_PORTF_PUR_R |= 0x11; 
-		
 }
 
 
@@ -302,7 +304,6 @@ Interrupt_Init(void)
 void ADC0_Init(void)
 {
 		SysCtlClockSet(SYSCTL_SYSDIV_5|SYSCTL_USE_PLL|SYSCTL_OSC_MAIN|SYSCTL_XTAL_16MHZ); // configures the system clock to be 40MHz
-		//SysCtlClockSet(SYSCTL_SYSDIV_4 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN | SYSCTL_XTAL_16MHZ);
 		SysCtlPeripheralEnable(SYSCTL_PERIPH_ADC0);	//activate the clock of ADC0
 		SysCtlDelay(6);	//insert a few cycles after enabling the peripheral to allow the clock to be fully activated.
 
@@ -313,48 +314,35 @@ void ADC0_Init(void)
 		ADCSequenceStepConfigure(ADC0_BASE, 2, 1, ADC_CTL_CH2);
 		ADCSequenceStepConfigure(ADC0_BASE, 2, 2, ADC_CTL_CH2);
 		ADCSequenceStepConfigure(ADC0_BASE, 2, 3, ADC_CTL_CH2 | ADC_CTL_IE | ADC_CTL_END); // Ch. 2 = PE1
-		IntPrioritySet(INT_ADC0SS2, 0x02);  	 // configure ADC0 SS2 interrupt priority as 0
+		IntPrioritySet(INT_ADC0SS2, 0x00);  	 // configure ADC0 SS2 interrupt priority as 0
 		IntEnable(INT_ADC0SS2);    				// enable interrupt 31 in NVIC (ADC0 SS2)
 		ADCIntEnableEx(ADC0_BASE, ADC_INT_SS2);      // arm interrupt of ADC0 SS2
 	
 		ADCSequenceEnable(ADC0_BASE, 2); //enable ADC0
 }
 
-//ADC1 initializaiton
+// ADC1 initializaiton
 void ADC1_Init(void)
 {
 		SysCtlClockSet(SYSCTL_SYSDIV_5|SYSCTL_USE_PLL|SYSCTL_OSC_MAIN|SYSCTL_XTAL_16MHZ); // configures the system clock to be 40MHz
-		//SysCtlClockSet(SYSCTL_SYSDIV_4 | SYSCTL_USE_PLL | SYSCTL_OSC_MAIN | SYSCTL_XTAL_16MHZ);
-		SysCtlPeripheralEnable(SYSCTL_PERIPH_ADC1);	//activate the clock of ADC0
+		SysCtlPeripheralEnable(SYSCTL_PERIPH_ADC1);	//activate the clock of ADC1
 		SysCtlDelay(6);	//insert a few cycles after enabling the peripheral to allow the clock to be fully activated.
 
-		ADCSequenceDisable(ADC1_BASE, 2); //disables ADC0 before the conf. is complete
-		ADCSequenceConfigure(ADC1_BASE, 2, ADC_TRIGGER_PROCESSOR, 0); // will use ADC0, SS1, processor-trigger, priority 0
+		ADCSequenceDisable(ADC1_BASE, 2); //disables ADC1 before the conf. is complete
+		ADCSequenceConfigure(ADC1_BASE, 2, ADC_TRIGGER_PROCESSOR, 0); // will use ADC1, SS2, processor-trigger, priority 0
 		ADCSequenceStepConfigure(ADC1_BASE, 2, 0, ADC_CTL_CH1);
 		ADCSequenceStepConfigure(ADC1_BASE, 2, 1, ADC_CTL_CH1);
 		ADCSequenceStepConfigure(ADC1_BASE, 2, 2, ADC_CTL_CH1);
 		ADCSequenceStepConfigure(ADC1_BASE, 2, 3, ADC_CTL_CH1 | ADC_CTL_IE | ADC_CTL_END); // Ch. 1 = PE2 (Y axis.)
-		IntPrioritySet(INT_ADC1SS2, 0x02);  	 // configure ADC0 SS2 interrupt priority as 0
-		IntEnable(INT_ADC1SS2);    				// enable interrupt 31 in NVIC (ADC0 SS2)
-		ADCIntEnableEx(ADC1_BASE, ADC_INT_SS2);      // arm interrupt of ADC0 SS2
+		IntPrioritySet(INT_ADC1SS2, 0x00);  	 // configure ADC1 SS2 interrupt priority as 0
+		IntEnable(INT_ADC1SS2); // enable interrupt 31 in NVIC (ADC1 SS2)
+		ADCIntEnableEx(ADC1_BASE, ADC_INT_SS2); // arm interrupt of ADC1 SS2
 	
-		ADCSequenceEnable(ADC1_BASE, 2); //enable ADC0
+		ADCSequenceEnable(ADC1_BASE, 2); //enable ADC1
 }
 
-/*
-// TIMER0A Initialization
-void Timer0A_Init(unsigned long period) 	// Using a periodic Timer 0A
-{
-	SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER0);
-	TimerConfigure(TIMER0_BASE, TIMER_CFG_PERIODIC);
-	TimerLoadSet(TIMER0_BASE, TIMER_A, period -1);
-	IntPrioritySet(INT_TIMER0A, 0x00);
-	IntEnable(INT_TIMER0A);
-	TimerIntEnable(TIMER0_BASE, TIMER_A);
-	//TimerEnable(TIMER0_BASE, TIMER_A); // enable Timer0A
-}
-*/
-
+// Prints the gameBoard array onto the LCD screen.
+// (From left to right, top to down)
 void drawBoard() {
 	for (int i = 0; i < 5; i++) {
 		Nokia5110_SetCursor(0, i);
@@ -365,7 +353,11 @@ void drawBoard() {
 }
 
 bool checkOpenPosition(int position) {
+	// Returns false is selected position is unavailable.
 	bool openSpace = false;
+	// If selected position is empty (there is a space character in
+	// the specific position in the gameBoard array), return true,
+	// meaning that the selected position is an unoccupied position.
 	switch (position) {
 		case 1: if (gameBoard[0][0] == ' ')
 			openSpace = true;
@@ -398,6 +390,7 @@ bool checkOpenPosition(int position) {
 	return openSpace;
 }
 
+// Clears the Tic Tac Toe game board of any signs. ('X' and 'O')
 void clearBoard() {
 	Nokia5110_SetCursor(0, 0);
 	Nokia5110_OutString(" ");
@@ -422,6 +415,9 @@ void clearBoard() {
 }
 
 void updatePos(int position) {
+	// Based on selected position # (1-9),
+	// the gameBoard array will update with
+	// the player's sign ('X').
 	switch (position) {
 		case 1: gameBoard[0][0] = playerSign; Nokia5110_SetCursor(0, 0); Nokia5110_OutChar(playerSign); break;
 		case 2: gameBoard[0][2] = playerSign; Nokia5110_SetCursor(2, 0); Nokia5110_OutChar(playerSign); break;
@@ -436,6 +432,9 @@ void updatePos(int position) {
 }
 
 void updateComputerPos(int position) {
+	// Based on the randomly selected position # (1-9),
+	// the gameBoard array will update with the 
+	// computer's sign ('O').
 	switch (position) {
 		case 1: gameBoard[0][0] = computerSign; Nokia5110_SetCursor(0, 0); Nokia5110_OutChar(computerSign); break;
 		case 2: gameBoard[0][2] = computerSign; Nokia5110_SetCursor(2, 0); Nokia5110_OutChar(computerSign); break;
@@ -449,6 +448,7 @@ void updateComputerPos(int position) {
 	}
 }
 
+/* --- CHECK WIN/TIE CONDITIONS --- */
 bool checkWin() {
 	// Checks if the player has won the game.
 	if ((gameBoard[0][0] == playerSign && gameBoard[2][2] == playerSign && gameBoard[4][4] == playerSign)
@@ -458,7 +458,8 @@ bool checkWin() {
 		|| (gameBoard[4][0] == playerSign && gameBoard[4][2] == playerSign && gameBoard[4][4] == playerSign)
 		|| (gameBoard[0][0] == playerSign && gameBoard[2][0] == playerSign && gameBoard[4][0] == playerSign)
 		|| (gameBoard[0][2] == playerSign && gameBoard[2][2] == playerSign && gameBoard[4][2] == playerSign)
-		|| (gameBoard[0][4] == playerSign && gameBoard[2][4] == playerSign && gameBoard[4][4] == playerSign)) {
+		|| (gameBoard[0][4] == playerSign && gameBoard[2][4] == playerSign && gameBoard[4][4] == playerSign)) 
+	{
 			playerWin = true;
 			return true;
 	}
@@ -471,8 +472,16 @@ bool checkWin() {
 		|| (gameBoard[4][0] == computerSign && gameBoard[4][2] == computerSign && gameBoard[4][4] == computerSign)
 		|| (gameBoard[0][0] == computerSign && gameBoard[2][0] == computerSign && gameBoard[4][0] == computerSign)
 		|| (gameBoard[0][2] == computerSign && gameBoard[2][2] == computerSign && gameBoard[4][2] == computerSign)
-		|| (gameBoard[0][4] == computerSign && gameBoard[2][4] == computerSign && gameBoard[4][4] == computerSign)) {
+		|| (gameBoard[0][4] == computerSign && gameBoard[2][4] == computerSign && gameBoard[4][4] == computerSign)) 
+	{
 			computerWin = true;
+			return true;
+	}
+	// Checks for no more open positions, and neither player or computer has won, aka a tie game condition.
+	else if (gameBoard[0][0] != ' ' && gameBoard[0][2] != ' ' && gameBoard[0][4] != ' '
+				&& gameBoard[2][0] != ' ' && gameBoard[2][2] != ' ' && gameBoard[2][4] != ' '
+				&& gameBoard[4][0] != ' ' && gameBoard[4][2] != ' ' && gameBoard[4][4] != ' ') 
+	{
 			return true;
 	}
 		// Return false if neither side has won.
@@ -531,20 +540,10 @@ void GPIOPortF_Handler(void)
 		//IntEnable(INT_GPIOF);
 		NVIC_EN0_R |= 0x40000000; 
 		
-		//SW1 (PF4) has action
-		//if((GPIO_PORTF_DATA_R & 0x10) == 0x10)
-		if(GPIO_PORTF_RIS_R&0x10)
-		{
-			//Nokia5110_SetCursor(6, 0);
-			//Nokia5110_OutString("One!");
-		}
-		
 		//SW2 (PF0) has action
 		//if((GPIO_PORTF_DATA_R & 0x01) == 0x01)
 		if(GPIO_PORTF_RIS_R&0x01)			
 		{
-			//Nokia5110_SetCursor(6, 1);
-			//Nokia5110_OutString("Two!");
 			if (!isPlayerTurn && choiceMade) {
 				checkEndGame();
 				drawBoard();
@@ -556,7 +555,7 @@ void GPIOPortF_Handler(void)
 }
 
 
-//interrupt handler
+// ADC interrupt handler
 void ADC0_Handler(void)
 {
 	if (isPlayerTurn) {
@@ -574,20 +573,9 @@ void ADC0_Handler(void)
 		ui32_Xpin = (ui32ADC0Value[0] + ui32ADC0Value[1] + ui32ADC0Value[2] + ui32ADC0Value[3]) / 4;	
 		ui32_Ypin = (ui32ADC1Value[0] + ui32ADC1Value[1] + ui32ADC1Value[2] + ui32ADC1Value[3]) / 4;
 
-		// Converts readings to mV
-		ui32x_volt = ( (ui32_Xpin * 3.3) / 4095 );		// X mV - outputs: 0, 1, 3
-		ui32y_volt = ( (ui32_Ypin * 3.3) / 4095 );  	// Y mV - outputs: 0, 1, 3
-	
+		// Converts readings to Voltage values (~0V - 3.3V)	
 		x_volt = ( (ui32_Xpin * 3.3) / 4095 );
 		y_volt = ( (ui32_Ypin * 3.3) / 4095 );  
-		
-		/*
-			Nokia5110_SetCursor(0, 0); | Nokia5110_SetCursor(2, 0); | Nokia5110_SetCursor(4, 0);
-			Nokia5110_SetCursor(0, 2); | Nokia5110_SetCursor(2, 2); | Nokia5110_SetCursor(4, 2);
-			Nokia5110_SetCursor(0, 4); | Nokia5110_SetCursor(2, 4); | Nokia5110_SetCursor(4, 4);
-			
-			Nokia5110_OutString(" ");
-		*/
 	
 		/* --- Diagonal Cases --- */
 		// Top Left
@@ -851,135 +839,7 @@ void ADC0_Handler(void)
 			Nokia5110_OutString("ERROR");
 		}
 	}
-	
-		//SysCtlDelay(SysCtlClockGet() / (1 * 3)); //delay ~1000 msec = 1 second
-	
-		/*
-		if (ui32x_volt >= 2 && xRead == false) {
-					UARTCharPutNonBlocking(UART0_BASE, 'L');
-					xRead = true;
-		} 
-		else if (ui32_Xpin < 1 && xRead == false) {
-					UARTCharPutNonBlocking(UART0_BASE, 'R');
-					xRead = true;
-		}
-		else {
-			if (xRead == true) {
-				xRead = false;
-			}
-		}
-
-		if (ui32y_volt >= 2 && yRead == false) {
-					UARTCharPutNonBlocking(UART0_BASE, 'U');
-					yRead = true;
-		} 
-		else if (ui32y_volt < 1 && yRead == false) {
-					UARTCharPutNonBlocking(UART0_BASE, 'D');
-					yRead = true;
-		}
-		else {
-			if (yRead == true) {
-				yRead = false;
-			}
-		}
-		*/
 }
-
-/*
-// INT. HANDLER  0A
-void Timer0A_Handler(void)
-{
-	//Ack. Flag
-	TimerIntClear(TIMER0_BASE, TIMER_TIMA_TIMEOUT);
-	
-	if (!testCondition) {
-		testCondition = true;
-	}
-	else if (testCondition) {
-		testCondition = false;
-	}
-}
-*/
-
-/*
-void UARTIntHandler(void)
-{
-    uint32_t ui32Status;
-
-    ui32Status = UARTIntStatus(UART0_BASE, true); //get interrupt status
-
-    UARTIntClear(UART0_BASE, ui32Status); //clear the asserted interrupts
-	
-		int i = 0;
-	
-		for (int j = 0; j < 12; j++) {
-			UARTCharPut(UART0_BASE, playerChoiceMessage[j]);
-		}
-		
-		bool posOpen = checkOpenPosition(userInput);
-		while (!posOpen) {
-			for (i = 0; i < 42; i++) {
-				UARTCharPut(UART0_BASE, posTakenError[i]);
-			}
-			UARTCharPut(UART0_BASE, '\n'); // New line carriage
-			UARTCharPut(UART0_BASE, '\r'); // Returns carriage to left of terminal.
-			switch(UARTCharGet(UART0_BASE)) {
-				case '1': UARTCharPutNonBlocking(UART0_BASE, '1');
-					userInput = 1; break;
-				case '2': UARTCharPutNonBlocking(UART0_BASE, '2');
-					userInput = 2; break;
-				case '3': UARTCharPutNonBlocking(UART0_BASE, '3');
-					userInput = 3; break;
-				case '4': UARTCharPutNonBlocking(UART0_BASE, '4');
-					userInput = 4; break;
-				case '5': UARTCharPutNonBlocking(UART0_BASE, '5');
-					userInput = 5; break;
-				case '6': UARTCharPutNonBlocking(UART0_BASE, '6');
-					userInput = 6; break;
-				case '7': UARTCharPutNonBlocking(UART0_BASE, '7');
-					userInput = 7; break;
-				case '8': UARTCharPutNonBlocking(UART0_BASE, '8');
-					userInput = 8; break;
-				case '9': UARTCharPutNonBlocking(UART0_BASE, '9');
-					userInput = 9; break;
-				default: for (i = 0; i < 44; i++) {
-					UARTCharPut(UART0_BASE, errorMessage[i]);
-				}
-			}
-			UARTCharPut(UART0_BASE, '\n'); // New line carriage
-			UARTCharPut(UART0_BASE, '\r'); // Returns carriage to left of terminal.
-			posOpen = checkOpenPosition(userInput);
-		}
-		
-		updatePos(userInput);
-			
-		drawBoard();
-		
-		checkEndGame();
-		
-		// --- COMPUTER'S TURN --- 
-		//SysCtlDelay(SysCtlClockGet() / (1 * 3)); //delay ~1000 msec = 1 second
-		//SysCtlDelay(SysCtlClockGet() / (1000 * 3)); //delay ~1 msec
-		
-		if (!checkWin()) {
-			SysCtlDelay(SysCtlClockGet() / (1 * 3)); //delay ~1000 msec = 1 second
-			computerTurn();
-			SysCtlDelay(SysCtlClockGet() / (1 * 3)); //delay ~1000 msec = 1 second
-			drawBoard();
-			checkEndGame();
-		}
-		
-		if (!checkWin()) {
-			askUserPrompt();
-		}
-
-		
-    //UARTCharPut(UART0_BASE, '\r'); // Returns carriage to left of terminal.
-		//UARTCharPut(UART0_BASE, '\n'); // New line carriage
-		//UARTCharPutNonBlocking(UART0_BASE, 'g');
-		//UARTCharGet(UART0_BASE)
-}
-*/
 
 // This is a helper function that sends an 8-bit message to the LCD.
 // inputs: type     COMMAND or DATA
@@ -1001,14 +861,11 @@ void static lcdwrite(enum typeOfWrite type, char message){
   }
 }
 
-//********Nokia5110_Init*****************
-// Initialize Nokia 5110 48x84 LCD by sending the proper
+// Initializes Nokia 5110 48x84 LCD by sending the proper
 // commands to the PCD8544 driver.  One new feature of the
 // LM4F120 is that its SSIs can get their baud clock from
 // either the system clock or from the 16 MHz precision
 // internal oscillator.
-// inputs: none
-// outputs: none
 // assumes: system clock rate of 80 MHz
 void Nokia5110_Init(void){
   volatile unsigned long delay;
@@ -1055,7 +912,6 @@ void Nokia5110_Init(void){
   lcdwrite(COMMAND, 0x0C);              // set display control to normal mode: 0x0D for inverse
 }
 
-//********Nokia5110_OutChar*****************20
 // Print a character to the Nokia 5110 48x84 LCD.  The
 // character will be printed at the current cursor position,
 // the cursor will automatically be updated, and it will
@@ -1068,15 +924,13 @@ void Nokia5110_Init(void){
 // outputs: none
 // assumes: LCD is in default horizontal addressing mode (V = 0)
 void Nokia5110_OutChar(unsigned char data){
-  int i;
   lcdwrite(DATA, 0x00);                 // blank vertical line padding
-  for(i=0; i<5; i=i+1){
+  for(int i=0; i<5; i++){
     lcdwrite(DATA, ASCII[data - 0x20][i]);
   }
   lcdwrite(DATA, 0x00);                 // blank vertical line padding
 }
 
-//********Nokia5110_OutString*****************
 // Print a string of characters to the Nokia 5110 48x84 LCD.
 // The string will automatically wrap, so padding spaces may
 // be needed to make the output look optimal.
@@ -1090,7 +944,6 @@ void Nokia5110_OutString(unsigned char *ptr){
   }
 }
 
-//********Nokia5110_OutUDec*****************
 // Output a 16-bit number in unsigned decimal format with a
 // fixed size of five right-justified digits of output.
 // Inputs: n  16-bit unsigned number
@@ -1132,7 +985,6 @@ void Nokia5110_OutUDec(unsigned short n){
   }
 }
 
-//********Nokia5110_SetCursor*****************
 // Move the cursor to the desired X- and Y-position.  The
 // next character will be printed here.  X=0 is the leftmost
 // column.  Y=0 is the top row.
@@ -1148,28 +1000,22 @@ void Nokia5110_SetCursor(unsigned char newX, unsigned char newY){
   lcdwrite(COMMAND, 0x40|newY);         // setting bit 6 updates Y-position
 }
 
-//********Nokia5110_Clear*****************
-// Clear the LCD by writing zeros to the entire screen and
+// Clears the LCD by writing zeros to the entire screen and
 // reset the cursor to (0,0) (top left corner of screen).
-// inputs: none
-// outputs: none
 void Nokia5110_Clear(void){
-  int i;
-  for(i=0; i<(MAX_X*MAX_Y/8); i=i+1){
+  for (int i = 0; i < (MAX_X*MAX_Y/8); i++){
     lcdwrite(DATA, 0x00);
   }
   Nokia5110_SetCursor(0, 0);
 }
 
-//********Nokia5110_DrawFullImage*****************
 // Fill the whole screen by drawing a 48x84 bitmap image.
 // inputs: ptr  pointer to 504 byte bitmap
 // outputs: none
 // assumes: LCD is in default horizontal addressing mode (V = 0)
 void Nokia5110_DrawFullImage(const char *ptr){
-  int i;
   Nokia5110_SetCursor(0, 0);
-  for(i=0; i<(MAX_X*MAX_Y/8); i=i+1){
+  for(int i=0; i<(MAX_X*MAX_Y/8); i++){
     lcdwrite(DATA, ptr[i]);
   }
 }
@@ -1177,50 +1023,37 @@ void Nokia5110_DrawFullImage(const char *ptr){
 int main(void) 
 {
 		// --- GAME INITIALIZATION --- //
-		Nokia5110_Init();
-		Nokia5110_Clear();
-		// Draw Title Screen
-		// Delay for a bit.
-		// Start game (draw board)
-		// OPTIONAL: Ask which sign to use, "X" or "O" and assign to playerSign, and other to computerSign.	
-		drawBoard();
+		Nokia5110_Init(); // Initializes LCD screen.
+		Nokia5110_Clear(); // Clears the screen of any pixels.
+		drawBoard(); // Draws the initial, empty game board.
 	
-		PortFunctionInit();
-		Interrupt_Init();
+		PortFunctionInit(); // Initializes the ports on the microcontroller.
+		Interrupt_Init(); // Initializes general interrupts. (For the GPIOPortF_Handler)
+		// Initializes both ADC0 and ADC1
 		ADC0_Init();
 		ADC1_Init();
 		SysCtlClockSet(SYSCTL_SYSDIV_1 | SYSCTL_USE_PLL | SYSCTL_OSC_INT | SYSCTL_XTAL_16MHZ);
-		IntMasterEnable(); //enable processor interrupts
-		//unsigned long period = SysCtlClockGet()/2; // reload timer0A
-		//Timer0A_Init(period);
+		IntMasterEnable(); // enable processor interrupts
 		ADCProcessorTrigger(ADC0_BASE, 2);
 		ADCProcessorTrigger(ADC1_BASE, 2);
 		
-		isPlayerTurn = true;
+		isPlayerTurn = true; // Starts out with the player selecting a position.
 		
-    while (1)
+    while (!endGame) // Loop while there is no endGame condition triggered.
     {
-			
 			if (!isPlayerTurn && choiceMade) {
 				checkEndGame();
 				drawBoard();
-				choiceMade = false;
 				isComputerTurn = true;
+				choiceMade = false;
 				computerTurn();
 			}
 			else if (!isComputerTurn && choiceMade) {
 				checkEndGame();
 				drawBoard();
-				choiceMade = false;
 				isPlayerTurn = true;
-			}
-			
+				choiceMade = false;
+			}	
 			// END
     }
 }
-
-/*
-	TO DO LIST
-- Attempt checking for joystick voltages on a ADC Timer Processor (i.e. check for current voltage val every 0.5 sec)
-
-*/
